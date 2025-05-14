@@ -126,6 +126,7 @@ Partial Class RebootForm
         Controls.Add(Label3)
         Controls.Add(Label6)
         Controls.Add(Label5)
+        Icon = CType(resources.GetObject("$this.Icon"), Icon)
         MaximumSize = New Size(673, 249)
         MinimumSize = New Size(673, 231)
         Name = "RebootForm"

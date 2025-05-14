@@ -43,13 +43,12 @@ Module AIimage
                 ' For each image request in the list
                 For Each req In imageRequests
                     Dim payloadObj = New With {
-                    .model = model,         ' "dall-e-3" or "image-alpha-001" (DALL·E 2)
-                    .prompt = req.imagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
-                    .size = req.size,       ' e.g. "1024x1024"
-                    .quality = quality,     ' "hd" or "standard" (DALL·E 3)
-                    .n = 1                  ' We generate 1 image per request
-                }
-
+                        model,
+                        .prompt = req.ImagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
+                        req.Size,
+                        quality,
+                        .n = 1
+                    }
                     Dim payloadJson As String = JsonConvert.SerializeObject(payloadObj, Formatting.Indented)
 
                     ' Wrap StringContent in a Using block
@@ -98,19 +97,21 @@ Module AIimage
     End Function
 
     Public Class ImageRequestData
-        Public Property imagePrompt As String = "An image"
-        Public Property numImages As Integer = 1
-        Public Property size As String = "512x512"
-        Public Property folderPath As String = $"C:\Users\{Environment.UserName}\Desktop\AIGenImages"
-        Public Property style As String = ""
-        Public Property imageName As String = "myimage.jpg"
+        Public Property ImagePrompt As String = "An image"
+        Public Property NumImages As Integer = 1
+        Public Property Size As String = "512x512"
+        Public Property FolderPath As String = $"C:\Users\{Environment.UserName}\Desktop\AIGenImages"
+        Public Property Style As String = ""
+        Public Property ImageName As String = "myimage.jpg"
     End Class
     Public Function ConversationHistoryToPlainText() As String
         Dim sb As New StringBuilder()
 
         For Each message In Globals.conversationHistory
-            If message.ContainsKey("role") AndAlso message.ContainsKey("content") Then
-                sb.AppendLine($"{message("role").ToUpper()}: {message("content")}")
+            Dim role As String = Nothing
+            Dim content As String = Nothing
+            If message.TryGetValue("role", role) AndAlso message.TryGetValue("content", content) Then
+                sb.AppendLine($"{role.ToUpper()}: {content}")
                 sb.AppendLine()
             End If
         Next

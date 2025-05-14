@@ -255,10 +255,10 @@ Function TakePrintScreenOrScreenShot {
                 End While
 
                 reqs.Add(New ImageRequestData With {
-                .imagePrompt = $"{imagePrompt} {style}".Trim(),
-                .size = "1792x1024",
-                .folderPath = folderPath,
-                .imageName = finalName
+                .ImagePrompt = $"{imagePrompt} {style}".Trim(),
+                .Size = "1792x1024",
+                .FolderPath = folderPath,
+                .ImageName = finalName
             })
             Next
 

@@ -23,6 +23,7 @@ Partial Class DigitalCell
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
         components = New ComponentModel.Container()
+        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(DigitalCell))
         Timer1 = New Timer(components)
         Label1 = New Label()
         Label6 = New Label()
@@ -107,6 +108,7 @@ Partial Class DigitalCell
         Controls.Add(Label5)
         Controls.Add(Label1)
         Controls.Add(PictureBox1)
+        Icon = CType(resources.GetObject("$this.Icon"), Icon)
         MaximumSize = New Size(843, 300)
         MinimumSize = New Size(843, 300)
         Name = "DigitalCell"

@@ -98,7 +98,7 @@ Module AIcall
                     httpClient.DefaultRequestHeaders.Clear()
                     httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}")
                     Dim resp = Await httpClient.PostAsync(endpoint, content, ct)
-                    Dim respText = Await resp.Content.ReadAsStringAsync()
+                    Dim respText = Await resp.Content.ReadAsStringAsync(ct)
 
                     If Not resp.IsSuccessStatusCode Then
                         Dim errObj = JObject.Parse(respText)
@@ -143,7 +143,10 @@ Module AIcall
     Public Function EstimateTokenCount(messages As List(Of Dictionary(Of String, String))) As Integer
         Dim totalChars As Integer = 0
         For Each msg In messages
-            If msg.ContainsKey("content") Then totalChars += msg("content").Length
+            Dim content As String = Nothing
+            If msg.TryGetValue("content", content) AndAlso content IsNot Nothing Then
+                totalChars += content.Length
+            End If
         Next
         Return totalChars \ 4
     End Function
