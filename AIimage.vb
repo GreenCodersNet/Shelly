@@ -1,7 +1,7 @@
 ﻿' ###  AIimage.vb - v1.0.1 ### 
 
 ' ##########################################################
-'  Shelly.vb - v1.0.1
+'  Shelly - v1.0.1
 '  License: Creative Commons Attribution-NonCommercial (CC BY-NC)
 '  https://creativecommons.org/licenses/by-nc/4.0/
 '  © 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
