@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Responsive Circle Glow with Inner Shadow (VB.NET WebView21)</title>
+    <base href="https://appassets/">
+
+    <style>
+        :root {
+            --padding: 0px;
+            --border: 6px;
+            /* Default colors */
+            --mainColor: hsl(197, 100%, 50%);
+            --highlightColor: rgba(198, 247, 255, 0.6);
+        }
+
+        /* Fill the container perfectly and center content */
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Responsive circle element */
+        .circle {
+            position: relative;
+            aspect-ratio: 1/1;
+            width: min(90vmin, 600px);
+            margin: 0;
+            border-radius: 50%;
+            filter: contrast(1.3) brightness(2);
+            z-index: 1;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+        }
+
+            /* Inline SVG for smooth circle border */
+            .circle svg.circle-border {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                pointer-events: none;
+                z-index: 999;
+                border-radius: 50%;
+                /* Add shape-rendering for better geometric precision */
+                shape-rendering: geometricPrecision;
+            }
+
+                /* Circle border with combined outer glow and inner shadow */
+                .circle svg.circle-border .border {
+                    fill: none;
+                    stroke: var(--mainColor);
+                    stroke-width: var(--border);
+                    transition: stroke 0.5s;
+                    /* Reference the updated filter (higher resolution) */
+                    filter: url(#glow-inner);
+                }
+
+        /* Inner image container, centered within the circle */
+        .image-container {
+            position: absolute;
+            z-index: 2;
+            top: var(--padding);
+            left: var(--padding);
+            right: var(--padding);
+            bottom: var(--padding);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 50%;
+            background: black;
+            margin: 2px;
+        }
+
+            .image-container img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                border-radius: 50%;
+                transform: scale(2.1);
+                transform-origin: center;
+            }
+    </style>
+</head>
+<body>
+    <div class="circle">
+        <svg class="circle-border" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+            <defs>
+                <filter id="glow-inner"
+                        x="-50%" y="-50%"
+                        width="200%" height="200%"
+                        filterUnits="userSpaceOnUse"
+                        filterRes="2000 2000">
+                    <!-- Outer Glow: Two blurred layers -->
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="4" result="blur1" />
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="8" result="blur2" />
+                    <feMerge result="outerGlow">
+                        <feMergeNode in="blur2" />
+                        <feMergeNode in="blur1" />
+                    </feMerge>
+
+                    <!-- Inner Shadow: Create a mask from SourceAlpha, blur it, and subtract it -->
+                    <feComponentTransfer in="SourceAlpha" result="alpha">
+                        <feFuncA type="table" tableValues="1 0" />
+                    </feComponentTransfer>
+                    <feGaussianBlur in="alpha" stdDeviation="3" result="innerBlur" />
+                    <feComposite in="innerBlur" in2="SourceAlpha" operator="in" result="innerShadow" />
+
+                    <!-- Merge outer glow, inner shadow, and the original graphic -->
+                    <feMerge>
+                        <feMergeNode in="outerGlow" />
+                        <feMergeNode in="innerShadow" />
+                        <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                </filter>
+            </defs>
+            <circle class="border" cx="50" cy="50" r="48" />
+        </svg>
+
+        <!-- Image container -->
+        <div class="image-container">
+            <img src="shelly_default_color.gif" alt="Centered" />
+        </div>
+    </div>
+
+    <script>
+        function setColor(color) {
+            let root = document.documentElement;
+            if (color === 'blue') {
+                root.style.setProperty('--mainColor', 'hsl(197, 100%, 50%)');
+                root.style.setProperty('--highlightColor', 'rgba(198, 247, 255, 0.6)');
+            } else if (color === 'green') {
+                root.style.setProperty('--mainColor', 'hsl(113.54deg 90.95% 49.48%)');
+                root.style.setProperty('--highlightColor', 'rgb(32 239 7 / 60%)');
+            } else if (color === 'red') {
+                root.style.setProperty('--mainColor', 'hsl(354.98deg 90.95% 49.48%)');
+                root.style.setProperty('--highlightColor', 'rgb(239 7 7 / 60%)');
+            }
+        }
+
+        // Functions available for VB.NET calls
+        function setColorDefault() {
+            setColor('blue');
+            document.querySelector('.image-container img').src = 'shelly_default_color.gif';
+        }
+        function setColorGreen() {
+            setColor('green');
+            document.querySelector('.image-container img').src = 'shelly_green_color.gif';
+        }
+        function setColorRed() {
+            setColor('red');
+            document.querySelector('.image-container img').src = 'shelly_red_color.gif';
+        }
+
+        // Set default color to blue on page load
+        setColorDefault();
+    </script>
+</body>
+</html>

@@ -1,0 +1,29 @@
+# top‐level EditorConfig
+root = true
+
+# All files: use spaces, 4‑space indent
+[*]
+indent_style = space
+indent_size = 4
+
+# VB files: analyzer severities
+[*.vb]
+
+# Reliability (null‐reference, disposal)
+dotnet_diagnostic.CA2000.severity = warning    # Dispose objects
+dotnet_diagnostic.CA1063.severity = warning    # Correct IDisposable implementation
+
+# Maintainability (complexity, unused code)
+dotnet_diagnostic.CA1502.severity = warning    # Too complex
+dotnet_diagnostic.CA1801.severity = warning    # Parameter never used
+
+# Naming (pascal/camel case)
+dotnet_diagnostic.CA1707.severity = warning    # No underscores
+dotnet_diagnostic.CA1709.severity = warning    # Identifiers must be cased correctly
+
+# Performance (string allocation, LINQ)
+dotnet_diagnostic.CA1822.severity = warning    # Mark members static
+dotnet_diagnostic.CA1848.severity = warning    # Use StringBuilder.Append instead of concatenation
+
+# Treat all analyzer warnings as compiler warnings (not errors) for now
+# If you want to treat any as errors, set severity = error
