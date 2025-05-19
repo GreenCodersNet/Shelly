@@ -117,65 +117,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="RichTextBox1.Text" xml:space="preserve">
-    <value>Shelly - Windows-Based AI Automation App
-Version: Free (Beta) Version 1.0.1
-Note: This Free (Beta) Version does not support 'Shared Memory' between Functions and PowerShell scripts. This is intended for token limitations. For more details and updates, visit: https://greencoders.net/greencoders-labs/Shelly-AI
-
----------------------------------------------------------
-1. About Shelly
----------------------------------------------------------
-Shelly is a standalone Windows-based application developed using VB.NET. It leverages the OpenAI API and requires an active, paid OpenAI API account to function (https://platform.openai.com/login/).
-Shelly utilizes ChatGPT-4.0, 4.0-mini, GPT-4.1, GPT-o3-mini models for the Light Version, with additional GPT models features available in the Pro Version.
-The application allows AI to interact with the user's machine via Windows PowerShell Console and built-in custom .NET functions for automation.
-
----------------------------------------------------------
-2. ⚠ LEGAL DISCLAIMER &amp; USER RESPONSIBILITY ⚠
----------------------------------------------------------
-• PowerShell scripting, while powerful, has inherent risks and limitations. Improper usage may lead to data loss, file deletion, security vulnerabilities, system modifications, or trigger antivirus warnings.
-• By using this application, you (the user) acknowledge and accept full responsibility for all actions and outcomes resulting from its use. The developer and any third parties involved in the creation, distribution, or support of Shelly App shall not be held liable for any damages, losses, malfunctions, or unintended consequences arising from its usage.
-If you do not fully trust this application or its developer, please uninstall it immediately.
-
----------------------------------------------------------
-3. Shelly App - An Experimental AI Automation Tool
----------------------------------------------------------
-Shelly is an experimental project designed to help users automate tasks through AI-powered scripting. While it provides powerful automation capabilities, it is still in Beta and may have limitations.
-
----------------------------------------------------------
-4. Automatic Updates 
----------------------------------------------------------
-This Free Beta Version does not support automatically updates. For more details please check: https://greencoders.net/greencoders-labs/Shelly-AI
-
----------------------------------------------------------
-5. Free Beta Version Overview
----------------------------------------------------------
-Advantages of Using Shelly:
-• Allows AI to interact directly with user files and perform advanced tasks.
-• Runs locally, without requiring a cloud account.
-• Low security risks – does not collect or share user data in any shape or form.
-• No external connections required, except for:
-	▸ OpenAI API (for AI functionalities).
-	▸ Microsoft Copilot (if enabled).
-• Built-in Custom Functions allow AI to process and generate large files efficiently.
-• Can search text within multiple files and folders.
-
----------------------------------------------------------
-⚠ Potential Risks &amp; Limitations ⚠
----------------------------------------------------------
-• AI may misinterpret user instructions, potentially leading to unintended system modifications or file deletions.
-• Use with caution: the AI executes commands as requested and does not inherently understand consequences.
-• In this Free Beta Version, PowerShell execution is restricted to non-administrator mode to limit potential risks.
-
----------------------------------------------------------
-6. Additional Important Notes
----------------------------------------------------------
-Some PowerShell-based tasks may be blocked by antivirus software. Temporarily disabling your antivirus may resolve such issues.
-The Free Beta Version may not support future updates or fixes.
-
----------------------------------------------------------
-✅ By continuing to use Shelly, you acknowledge and accept these terms.
----------------------------------------------------------</value>
-  </data>
   <assembly alias="System.Drawing" name="System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
   <data name="$this.Icon" type="System.Drawing.Icon, System.Drawing" mimetype="application/x-microsoft.net.object.bytearray.base64">
     <value>

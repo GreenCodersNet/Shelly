@@ -43,12 +43,13 @@ Module AIimage
                 ' For each image request in the list
                 For Each req In imageRequests
                     Dim payloadObj = New With {
-                        model,
-                        .prompt = req.ImagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
-                        req.Size,
-                        quality,
-                        .n = 1
-                    }
+                    .model = model,         ' "dall-e-3" or "image-alpha-001" (DALL·E 2)
+                    .prompt = req.ImagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
+                    .size = req.Size,       ' e.g. "1024x1024"
+                    .quality = quality,     ' "hd" or "standard" (DALL·E 3)
+                    .n = 1                  ' We generate 1 image per request
+                }
+
                     Dim payloadJson As String = JsonConvert.SerializeObject(payloadObj, Formatting.Indented)
 
                     ' Wrap StringContent in a Using block

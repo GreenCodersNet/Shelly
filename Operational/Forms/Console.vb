@@ -64,7 +64,13 @@ Public Class Console
         If InvokeRequired Then
             Invoke(New MethodInvoker(Sub() AppendDebugMessage(message)))
         Else
+            ' 1) move caret to end before appending
+            ShellyConsole.SelectionStart = ShellyConsole.TextLength
+            ' 2) append the message
             ShellyConsole.AppendText(message & vbCrLf)
+            ' 3) scroll to the new caret position
+            ShellyConsole.SelectionStart = ShellyConsole.TextLength
+            ShellyConsole.ScrollToCaret()
         End If
     End Sub
 

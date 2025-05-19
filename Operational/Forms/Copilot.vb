@@ -42,10 +42,14 @@ Public Class Copilot
     Private Async Function InitializeWebView2Async() As Task
         Try
             ' Define a persistent folder for WebView2 user data.
-            Dim userDataFolder As String = Path.Combine(Application.StartupPath, "WebView2Data")
+            Dim userData = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "GreenCoders", "Shelly", "WebView2")
+            Directory.CreateDirectory(userData)
 
-            ' Create the WebView2 environment using the persistent data folder.
-            Dim env As CoreWebView2Environment = Await CoreWebView2Environment.CreateAsync(Nothing, userDataFolder)
+            Dim env As CoreWebView2Environment = Await CoreWebView2Environment.CreateAsync(
+            browserExecutableFolder:=Nothing,
+            userDataFolder:=userData)
             Await WebViewAiOne.EnsureCoreWebView2Async(env)
 
             ' Ensure CoreWebView2 is available before proceeding
@@ -118,7 +122,7 @@ Public Class Copilot
     End Sub
 
     ' Event handler for the Clear Data button.
-    Private Sub btnClearData_Click(sender As Object, e As EventArgs) Handles btnClearData.Click
+    Private Sub BtnClearData_Click(sender As Object, e As EventArgs) Handles btnClearData.Click
         WebViewAiOne.CoreWebView2.Reload()
     End Sub
 
@@ -187,8 +191,8 @@ Public Class Copilot
         Timer4.Dispose()
         Timer1.Stop()
         Timer1.Dispose()
-        idleTimer.Stop()
-        idleTimer.Dispose()
+        IdleTimer.Stop()
+        IdleTimer.Dispose()
     End Sub
 
     Private Sub Timer4_Tick(sender As Object, e As EventArgs) Handles Timer4.Tick
@@ -199,7 +203,7 @@ Public Class Copilot
 
     End Sub
 
-    Private Sub idleTimer_Tick(sender As Object, e As EventArgs) Handles idleTimer.Tick
+    Private Sub IdleTimer_Tick(sender As Object, e As EventArgs) Handles IdleTimer.Tick
 
     End Sub
 End Class

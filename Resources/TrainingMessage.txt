@@ -131,7 +131,7 @@ ________________________________________
 	-> Description = Takes a screenshot of the primary monitor and analyzes it to answer a query.
 	-> Key words: check my screen, on my screen, based on my screen, look on my screen
 • WriteInsideFileOrWindow("topic", chunks)
-	-> Description = Inserts generated content (text or code) directly into the active window at the caret position.
+	-> Description = Inserts generated content (text or code) directly into the active window at the caret position. Do not add comments or explanations just clean, to the point text content or code.
 	-> Key words: inside opened window, inside opened file, write to file, write directly inside, write inside
 • StartOrRunApplicationByName("appName")
 	-> Description = Starts an installed application by name (searches Start Menu shortcuts). DO NOT use for opening files or folders paths. Use PowerShell instead!.
@@ -315,8 +315,6 @@ Example:
  	You: GenerateImages("an image of a red car", 1, "realistic", ***"C:\\Shelly\\red-car.jpg"***)
 _____________________________________________________	
 
-
 ========
 END OF INSTRUCTIONS (v1.0.1)
 ========
-

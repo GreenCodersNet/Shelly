@@ -41,7 +41,7 @@ Partial Class Console
         ShellyConsole.Location = New Point(27, 58)
         ShellyConsole.Name = "ShellyConsole"
         ShellyConsole.ScrollBars = RichTextBoxScrollBars.Vertical
-        ShellyConsole.Size = New Size(842, 463)
+        ShellyConsole.Size = New Size(657, 315)
         ShellyConsole.TabIndex = 4
         ShellyConsole.Text = ""
         ' 
@@ -52,7 +52,7 @@ Partial Class Console
         Panel1.Controls.Add(Panel2)
         Panel1.Location = New Point(21, 51)
         Panel1.Name = "Panel1"
-        Panel1.Size = New Size(854, 515)
+        Panel1.Size = New Size(669, 367)
         Panel1.TabIndex = 5
         ' 
         ' Panel2
@@ -60,9 +60,9 @@ Partial Class Console
         Panel2.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left Or AnchorStyles.Right
         Panel2.BorderStyle = BorderStyle.FixedSingle
         Panel2.Controls.Add(UserInput)
-        Panel2.Location = New Point(6, 479)
+        Panel2.Location = New Point(6, 331)
         Panel2.Name = "Panel2"
-        Panel2.Size = New Size(842, 31)
+        Panel2.Size = New Size(657, 31)
         Panel2.TabIndex = 6
         ' 
         ' UserInput
@@ -74,7 +74,7 @@ Partial Class Console
         UserInput.ForeColor = SystemColors.HighlightText
         UserInput.Location = New Point(6, 4)
         UserInput.Name = "UserInput"
-        UserInput.Size = New Size(840, 22)
+        UserInput.Size = New Size(655, 22)
         UserInput.TabIndex = 6
         UserInput.Text = ""
         ' 
@@ -83,10 +83,11 @@ Partial Class Console
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.MidnightBlue
-        ClientSize = New Size(896, 578)
+        ClientSize = New Size(711, 430)
         Controls.Add(ShellyConsole)
         Controls.Add(Panel1)
         Icon = CType(resources.GetObject("$this.Icon"), Icon)
+        MinimumSize = New Size(727, 469)
         Name = "Console"
         Text = "Console | v 1.0"
         Panel1.ResumeLayout(False)

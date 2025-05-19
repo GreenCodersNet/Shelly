@@ -33,7 +33,7 @@ Partial Class Copilot
         CloseCopilot = New Button()
         Timer4 = New Timer(components)
         AiOnePrompt = New RichTextBox()
-        idleTimer = New Timer(components)
+        IdleTimer = New Timer(components)
         CType(WebViewAiOne, ComponentModel.ISupportInitialize).BeginInit()
         Panel1.SuspendLayout()
         SuspendLayout()
@@ -149,7 +149,7 @@ Partial Class Copilot
         AiOnePrompt.Text = ""
         AiOnePrompt.Visible = False
         ' 
-        ' idleTimer
+        ' IdleTimer
         ' 
         ' 
         ' Copilot
@@ -181,5 +181,5 @@ Partial Class Copilot
     Friend WithEvents Timer3 As Timer
     Friend WithEvents Timer4 As Timer
     Friend WithEvents AiOnePrompt As RichTextBox
-    Friend WithEvents idleTimer As Timer
+    Friend WithEvents IdleTimer As Timer
 End Class

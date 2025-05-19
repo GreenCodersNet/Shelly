@@ -176,9 +176,9 @@ Partial Class Settings
         SaveSettings.FlatStyle = FlatStyle.Flat
         SaveSettings.Font = New Font("Bahnschrift SemiLight", 10F)
         SaveSettings.ForeColor = Color.Lime
-        SaveSettings.Location = New Point(28, 464)
+        SaveSettings.Location = New Point(28, 468)
         SaveSettings.Name = "SaveSettings"
-        SaveSettings.Size = New Size(480, 39)
+        SaveSettings.Size = New Size(479, 39)
         SaveSettings.TabIndex = 64
         SaveSettings.Text = "Save  Settings"
         SaveSettings.UseVisualStyleBackColor = False
@@ -202,7 +202,7 @@ Partial Class Settings
         Label5.BackColor = Color.FromArgb(CByte(0), CByte(192), CByte(0))
         Label5.Font = New Font("Cascadia Code", 9.75F)
         Label5.ForeColor = Color.White
-        Label5.Location = New Point(203, 60)
+        Label5.Location = New Point(293, 60)
         Label5.Name = "Label5"
         Label5.Size = New Size(250, 1)
         Label5.TabIndex = 68
@@ -214,7 +214,7 @@ Partial Class Settings
         Label6.BackColor = Color.Transparent
         Label6.Font = New Font("Cascadia Code", 12F)
         Label6.ForeColor = Color.White
-        Label6.Location = New Point(203, 30)
+        Label6.Location = New Point(308, 27)
         Label6.Name = "Label6"
         Label6.Size = New Size(145, 21)
         Label6.TabIndex = 69
@@ -283,7 +283,7 @@ Partial Class Settings
         ProButton.FlatStyle = FlatStyle.Flat
         ProButton.Font = New Font("Bahnschrift SemiLight", 10F)
         ProButton.ForeColor = Color.MediumOrchid
-        ProButton.Location = New Point(28, 424)
+        ProButton.Location = New Point(270, 386)
         ProButton.Name = "ProButton"
         ProButton.Size = New Size(115, 32)
         ProButton.TabIndex = 74
@@ -300,8 +300,8 @@ Partial Class Settings
         IAmHumanButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
         IAmHumanButton.FlatStyle = FlatStyle.Flat
         IAmHumanButton.Font = New Font("Bahnschrift SemiLight", 10F)
-        IAmHumanButton.ForeColor = Color.OrangeRed
-        IAmHumanButton.Location = New Point(393, 386)
+        IAmHumanButton.ForeColor = Color.Cyan
+        IAmHumanButton.Location = New Point(538, 386)
         IAmHumanButton.Name = "IAmHumanButton"
         IAmHumanButton.Size = New Size(115, 32)
         IAmHumanButton.TabIndex = 75
@@ -326,7 +326,7 @@ Partial Class Settings
         CheckBoxHints.FlatStyle = FlatStyle.Flat
         CheckBoxHints.Font = New Font("Bahnschrift SemiLight", 10F)
         CheckBoxHints.ForeColor = Color.White
-        CheckBoxHints.Location = New Point(414, 104)
+        CheckBoxHints.Location = New Point(676, 104)
         CheckBoxHints.Name = "CheckBoxHints"
         CheckBoxHints.Size = New Size(81, 27)
         CheckBoxHints.TabIndex = 77
@@ -347,7 +347,7 @@ Partial Class Settings
         CheckBoxPromptRevision.FlatStyle = FlatStyle.Flat
         CheckBoxPromptRevision.Font = New Font("Bahnschrift SemiLight", 10F)
         CheckBoxPromptRevision.ForeColor = Color.White
-        CheckBoxPromptRevision.Location = New Point(283, 104)
+        CheckBoxPromptRevision.Location = New Point(545, 104)
         CheckBoxPromptRevision.Name = "CheckBoxPromptRevision"
         CheckBoxPromptRevision.Size = New Size(118, 27)
         CheckBoxPromptRevision.TabIndex = 78
@@ -381,8 +381,8 @@ Partial Class Settings
         Button1.FlatAppearance.MouseOverBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
         Button1.FlatStyle = FlatStyle.Flat
         Button1.Font = New Font("Bahnschrift SemiLight", 10F)
-        Button1.ForeColor = Color.OrangeRed
-        Button1.Location = New Point(393, 426)
+        Button1.ForeColor = Color.Cyan
+        Button1.Location = New Point(659, 386)
         Button1.Name = "Button1"
         Button1.Size = New Size(115, 32)
         Button1.TabIndex = 80
@@ -396,7 +396,7 @@ Partial Class Settings
         Label9.BackColor = Color.Transparent
         Label9.Font = New Font("Cascadia Code", 9.75F)
         Label9.ForeColor = Color.White
-        Label9.Location = New Point(344, 360)
+        Label9.Location = New Point(538, 360)
         Label9.Name = "Label9"
         Label9.Size = New Size(72, 17)
         Label9.TabIndex = 82
@@ -408,7 +408,7 @@ Partial Class Settings
         Label8.BackColor = Color.FromArgb(CByte(0), CByte(192), CByte(0))
         Label8.Font = New Font("Cascadia Code", 9.75F)
         Label8.ForeColor = Color.White
-        Label8.Location = New Point(314, 356)
+        Label8.Location = New Point(506, 350)
         Label8.Name = "Label8"
         Label8.Size = New Size(1, 100)
         Label8.TabIndex = 83
@@ -419,7 +419,7 @@ Partial Class Settings
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         BackgroundImageLayout = ImageLayout.Stretch
-        ClientSize = New Size(532, 526)
+        ClientSize = New Size(794, 526)
         Controls.Add(Label8)
         Controls.Add(Label9)
         Controls.Add(Button1)
@@ -444,9 +444,9 @@ Partial Class Settings
         Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Location = New Point(548, 629)
         MaximizeBox = False
-        MaximumSize = New Size(548, 565)
+        MaximumSize = New Size(810, 565)
         MinimizeBox = False
-        MinimumSize = New Size(548, 565)
+        MinimumSize = New Size(810, 565)
         Name = "Settings"
         StartPosition = FormStartPosition.WindowsDefaultBounds
         Text = "Shelly Settings"

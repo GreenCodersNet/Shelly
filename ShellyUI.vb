@@ -131,56 +131,78 @@ Partial Public Class Shelly
         CustomFunctionsEngine.InitializeFunctions(Me.functionRegistry)
     End Sub
 
+    Private _webView2Environment As CoreWebView2Environment
+
     Private Async Sub Shelly_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
         Try
-            EnsureShellyFolderExists()
 
-            ' Additional form transparency and topmost config (redundant but safe)
+            '================ load right bottom corner ==================
+
+            '============================================================
+
+            ' 1) Show welcome if install/update
+            Dim args = Environment.GetCommandLineArgs()
+            If args.Contains("/show-welcome") Then Welcome.Show(Me)
+
+            ' 2) Your other init (folders, transparency, etc.)...
+            EnsureShellyFolderExists()
             Me.FormBorderStyle = FormBorderStyle.None
             Me.BackColor = Color.Black
             Me.TransparencyKey = Color.Black
             Me.TopMost = True
-
-            ' Right Click Menu Design
             ApplyDarkContextMenuStyle(PSFunctResultsContextMenu)
             ApplyYellowContextMenuStyle(PSFunctResultsContextMenu2)
 
-            ' Configure WebView2 for transparency
+            ' 3) Prepare WebView2 for transparent background
             WebView21.DefaultBackgroundColor = Color.Transparent
 
-            ' Initialize WebView2
-            Await WebView21.EnsureCoreWebView2Async(Nothing)
-            WebView21.CoreWebView2.Settings.IsWebMessageEnabled = True
-            AddHandler WebView21.CoreWebView2.WebMessageReceived, AddressOf CoreWebView2_WebMessageReceived
+            ' 4) Create a per-user data folder under LocalAppData
+            Dim userData = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "GreenCoders", "Shelly", "WebView2")
+            Directory.CreateDirectory(userData)
 
-            ' Attach mouse event handlers for drag/click functionality on WebView21
+            ' 5) Initialize the CoreWebView2Environment once
+            _webView2Environment = Await CoreWebView2Environment.CreateAsync(
+                browserExecutableFolder:=Nothing,
+                userDataFolder:=userData)
+
+            ' 6) Ensure WebView2 is created with our environment
+            Await WebView21.EnsureCoreWebView2Async(_webView2Environment)
+            WebView21.CoreWebView2.Settings.IsWebMessageEnabled = True
+            AddHandler WebView21.CoreWebView2.WebMessageReceived,
+                       AddressOf CoreWebView2_WebMessageReceived
+
+            ' 7) Hook mouse and navigation events
             AddHandler WebView21.MouseDown, AddressOf WebView21_MouseDown
             AddHandler WebView21.MouseMove, AddressOf WebView21_MouseMove
             AddHandler WebView21.MouseUp, AddressOf WebView21_MouseUp
+            AddHandler WebView21.NavigationCompleted,
+                       AddressOf WebView21_NavigationCompleted
 
-            ' Attach handler for NavigationCompleted
-            AddHandler WebView21.NavigationCompleted, AddressOf WebView21_NavigationCompleted
+            ' 8) Map your local “Resources” folder
+            Dim resourcesPath = Path.Combine(Application.StartupPath, "Resources")
+            WebView21.CoreWebView2.SetVirtualHostNameToFolderMapping(
+                "appassets", resourcesPath,
+                CoreWebView2HostResourceAccessKind.Allow)
 
-            Dim resourcesPath As String = Path.Combine(Application.StartupPath, "Resources")
-            Dim folderPath As String = resourcesPath
-            WebView21.CoreWebView2.SetVirtualHostNameToFolderMapping("appassets", folderPath, CoreWebView2HostResourceAccessKind.Allow)
-
-            ' Load embedded HTML
-            Dim resourceName As String = "ShellyAI.ShellyAnimation.html" ' Adjust if your project namespace differs
-            Dim htmlContent As String = LoadHtmlFromResource(resourceName)
-
+            ' 9) Load the embedded HTML splash
+            Dim htmlContent = LoadHtmlFromResource("ShellyAI.ShellyAnimation.html")
             If Not String.IsNullOrWhiteSpace(htmlContent) Then
                 WebView21.NavigateToString(htmlContent)
             Else
                 MessageBox.Show("Error: HTML content is empty or could not be loaded.",
                                 "Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
             End If
+
         Catch ex As Exception
             MessageBox.Show("Error during initialization: " & ex.Message,
-                            "Initialization Error", MessageBoxButtons.OK, MessageBoxIcon.Error)
+                            "Initialization Error",
+                            MessageBoxButtons.OK, MessageBoxIcon.Error)
         End Try
     End Sub
+
 
     ' --- WebView21 extended mouse events for drag and click functionality ---
 
@@ -269,9 +291,10 @@ Partial Public Class Shelly
     ' --------------------------------------------------------------------
     '   FORM SHOWN & CLOSING
     ' --------------------------------------------------------------------
-    Private Sub Shelly_Shown(sender As Object, e As EventArgs) Handles Me.Shown
-        ' Remove focus from all controls
-        Me.ActiveControl = Nothing
+    Private Async Sub Shelly_Shown(sender As Object, e As EventArgs)
+        RemoveHandler Me.Shown, AddressOf Shelly_Shown
+        Await UpdateHelper.CheckForAndInstallUpdateAsync()
+        ' If an update ran, the app will Exit; otherwise your form continues to load.
     End Sub
 
     Private Sub Shelly_FormClosing(sender As Object, e As FormClosingEventArgs) Handles MyBase.FormClosing
@@ -384,11 +407,17 @@ Partial Public Class Shelly
     '   HELPER FOR RUNNING JAVASCRIPT IN WebView2
     ' --------------------------------------------------------------------
     Public Async Function ExecuteScriptSafeAsync(script As String) As Task
-        ' If CoreWebView2 is not initialized, wait for it
+        ' If the WebView isn't yet initialized, do so with our existing env
         If WebView21.CoreWebView2 Is Nothing Then
-            Await WebView21.EnsureCoreWebView2Async(Nothing)
+            If _webView2Environment IsNot Nothing Then
+                Await WebView21.EnsureCoreWebView2Async(_webView2Environment)
+            Else
+                ' Fallback (should rarely happen)
+                Await WebView21.EnsureCoreWebView2Async(Nothing)
+            End If
         End If
-        ' Now execute the script
+
+        ' Now it's safe to execute
         Await WebView21.CoreWebView2.ExecuteScriptAsync(script)
     End Function
 

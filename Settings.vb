@@ -63,6 +63,7 @@ Public Class Settings
         Timer1.Start()
 
         RebootForm.Show()
+        Me.ActiveControl = Nothing
     End Sub
 
     Public Sub PopulateAiModels()
@@ -143,11 +144,13 @@ Public Class Settings
     ' These remain unchanged
     Private Sub AboutButton_Click(sender As Object, e As EventArgs) Handles AboutButton.Click
         RestoreWindow(About)
+        Me.ActiveControl = Nothing
     End Sub
 
 
     Private Sub IAmHumanButton_Click(sender As Object, e As EventArgs) Handles IAmHumanButton.Click
         RestoreWindow(IAmHuman)
+        Me.ActiveControl = Nothing
     End Sub
 
     Private Sub ProButton_Click(sender As Object, e As EventArgs) Handles ProButton.Click
@@ -159,6 +162,7 @@ Public Class Settings
         Catch ex As Exception
             Debug.WriteLine("[ERROR] Opening URL: " & ex.Message)
         End Try
+        Me.ActiveControl = Nothing
     End Sub
 
     Private Sub Settings_Shown(sender As Object, e As EventArgs) Handles Me.Shown
@@ -185,6 +189,7 @@ Public Class Settings
                 CheckBoxHints.Text = "Hints OFF"
             End If
         End If
+        Me.ActiveControl = Nothing
     End Sub
 
 
@@ -195,6 +200,7 @@ Public Class Settings
         Else
             CheckBoxPromptRevision.Text = "Rephrasing OFF"
         End If
+        Me.ActiveControl = Nothing
     End Sub
 
     Private Sub DefaultFolderWindow_Click(sender As Object, e As EventArgs) Handles DefaultFolderWindow.Click
@@ -203,9 +209,10 @@ Public Class Settings
 
     Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click
         RestoreWindow(DigitalCell)
+        Me.ActiveControl = Nothing
     End Sub
 
-    Private Sub aiSelection_SelectedIndexChanged(sender As Object, e As EventArgs) Handles aiSelection.SelectedIndexChanged
+    Private Sub AISelection_SelectedIndexChanged(sender As Object, e As EventArgs) Handles aiSelection.SelectedIndexChanged
 
     End Sub
 
@@ -216,4 +223,6 @@ Public Class Settings
     Private Sub AssitantID_TextChanged(sender As Object, e As EventArgs) Handles AssitantID.TextChanged
 
     End Sub
+
+
 End Class

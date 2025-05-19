@@ -13,8 +13,6 @@ Imports System.Text.RegularExpressions
 Imports System.Threading
 Imports System.Text
 Imports Newtonsoft.Json
-Imports System.Linq
-Imports System.Windows.Forms
 Imports Newtonsoft.Json.Linq
 
 Partial Public Class Shelly
@@ -68,10 +66,16 @@ Partial Public Class Shelly
         End Get
     End Property
 
+
+
     Public Sub New()
         InitializeComponent()
         _instance = Me
+
+        AddHandler Me.Shown, AddressOf Shelly_Shown
     End Sub
+
+
 
     ' ==============================
     '       LOGIC & UTILITIES
@@ -538,7 +542,6 @@ Partial Public Class Shelly
             If ct.IsCancellationRequested Then Exit For
             Await HandleSingleSegmentAsync(seg, ct)
             Await Task.Delay(50, ct)   ' UI responsiveness
-            MessageBox.Show("here")
         Next
 
         LabelStatusUpdate.Text = "All tasks completed."
@@ -813,6 +816,7 @@ Partial Public Class Shelly
             cancellationTokenSource = Nothing
             Me.ActiveControl = Nothing
         End Try
+        Me.ActiveControl = Nothing
     End Sub
 
     Private Async Sub ButtonUseSpeech_Click(sender As Object, e As EventArgs) Handles ButtonUseSpeech.Click
@@ -853,9 +857,8 @@ Partial Public Class Shelly
             ButtonUseSpeech.Enabled = True
             CancelTaskButton.Enabled = False
             cancellationTokenSource = Nothing
-
-            Me.ActiveControl = Nothing
         End Try
+        Me.ActiveControl = Nothing
     End Sub
 
     ' ================================================================
@@ -870,6 +873,7 @@ Partial Public Class Shelly
         Catch ex As Exception
             Debug.WriteLine("Error in Button4_Click: " & ex.Message)
         End Try
+        Me.ActiveControl = Nothing
     End Sub
 
     Private Sub ShowSettings_Click(sender As Object, e As EventArgs) Handles ShowSettings.Click
