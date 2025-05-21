@@ -58,7 +58,7 @@ Module AIcall
         ' 2️ Estimate tokens
         Dim promptTokens As Integer = EstimateTokenCount(messages)
         Const ContextWindow As Integer = 128000       ' Max tokens input+output buffer
-        Const MaxCompletion As Integer = 16384        ' Max tokens model will generate
+        Const MaxCompletion As Integer = 16000       ' Max tokens model will generate
 
         ' Warn if user-supplied messages alone exceed context
         If promptTokens > ContextWindow Then

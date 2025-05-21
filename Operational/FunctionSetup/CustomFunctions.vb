@@ -961,39 +961,40 @@ $foundFiles
     End Function
 
     Public Async Function UpdateFileByChunks(
-        filePath As String,
-        updateInstruction As String,
-        Optional chunkTokenOverride As Integer = -1
-    ) As Task(Of String)
+    filePath As String,
+    updateInstruction As String,
+    Optional chunkTokenOverride As Integer = -1
+) As Task(Of String)
 
-        ' ─── 1️⃣ Load and cache full file text ───
-        Dim cachedText As String = Nothing
-        If Not Globals.FileContents.TryGetValue(filePath, cachedText) Then
-            cachedText = File.ReadAllText(filePath)
+        ' 1️⃣ Load and cache full file text
+        Dim fullText As String = Nothing
+        If Not Globals.FileContents.TryGetValue(filePath, fullText) Then
+            fullText = File.ReadAllText(filePath, Encoding.UTF8)
         End If
-        Dim fullText As String = cachedText
         Globals.FileContents(filePath) = fullText
 
-        ' ─── 2️⃣ Estimate total tokens for fullText ───
+        ' 2️⃣ Estimate total tokens for full text
         Dim contentMessage = New Dictionary(Of String, String) From {
-            {"role", "user"},
-            {"content", fullText}
-        }
-        Dim totalTokens As Integer = AIcall.EstimateTokenCount(New List(Of Dictionary(Of String, String)) From {contentMessage})
+        {"role", "user"},
+        {"content", fullText}
+    }
+        Dim totalTokens As Integer = AIcall.EstimateTokenCount(
+        New List(Of Dictionary(Of String, String)) From {contentMessage}
+    )
 
-        Const ContextWindow As Integer = 128000
-        Const MaxCompletion As Integer = 16384
+        Const ContextWindow As Integer = 128000  ' max GPT context tokens
+        Const MaxCompletion As Integer = 16000  ' max tokens per reply
 
-        ' ─── 3️⃣ Determine safe input chunk size ───
-        Dim safeInputTokens As Integer = CInt(ContextWindow * 0.65)
+        ' 3️⃣ Determine maximum input tokens for each chunk (up to 128K)
+        Dim safeInputTokens As Integer = ContextWindow
         If chunkTokenOverride > 0 Then
-            safeInputTokens = Math.Min(chunkTokenOverride, safeInputTokens)
+            safeInputTokens = Math.Min(chunkTokenOverride, ContextWindow)
         End If
         Const charsPerToken As Integer = 4
         Dim maxCharsPerChunk As Integer = safeInputTokens * charsPerToken
         If maxCharsPerChunk < 200 Then maxCharsPerChunk = 200
 
-        ' ─── 4️⃣ Split fullText into chunks if needed ───
+        ' 4️⃣ Split fullText into chunks (if needed), with 1-line overlap
         Dim chunks As New List(Of String)
         If totalTokens <= ContextWindow Then
             chunks.Add(fullText)
@@ -1004,13 +1005,13 @@ $foundFiles
             While startIdx < lines.Length
                 Dim sb As New StringBuilder()
                 Dim i As Integer = startIdx
-                ' include overlap from previous
+                ' include overlap from previous chunk
                 If startIdx > 0 Then
                     For j = startIdx - overlapLines To startIdx - 1
                         sb.AppendLine(lines(j))
                     Next
                 End If
-                ' accumulate until maxCharsPerChunk
+                ' accumulate lines until maxCharsPerChunk is reached
                 While i < lines.Length AndAlso sb.Length + lines(i).Length + 1 <= maxCharsPerChunk
                     sb.AppendLine(lines(i))
                     i += 1
@@ -1020,7 +1021,7 @@ $foundFiles
             End While
         End If
 
-        ' ─── 5️⃣ Process each chunk with continuation ───
+        ' 5️⃣ Process each chunk with the AI (handling continuation if needed)
         Dim updatedChunks As New List(Of String)
         For idx = 0 To chunks.Count - 1
             Dim chunkText = chunks(idx)
@@ -1028,45 +1029,53 @@ $foundFiles
             Dim isFirst As Boolean = True
 
             Do
-                ' Build messages: initial or continue
-                Dim messages As List(Of Dictionary(Of String, String))
+                ' Build prompt: initial or continuation
+                Dim messages As New List(Of Dictionary(Of String, String))
+                ' System role (optional, for better editing style)
+                messages.Add(New Dictionary(Of String, String) From {
+                {"role", "system"},
+                {"content", "You are a skilled editor and programmer."}
+            })
+
                 If isFirst Then
-                    ' initial request for this chunk
+                    ' Initial request with full instruction and chunk content
                     Dim promptBuilder As New StringBuilder()
+                    promptBuilder.AppendLine("Below is a portion of a file. Update the content according to the following instruction:")
                     promptBuilder.AppendLine($"Instruction: {updateInstruction}")
-                    promptBuilder.AppendLine("---")
-                    promptBuilder.AppendLine($"Chunk {idx + 1}/{chunks.Count}:")
-                    promptBuilder.AppendLine("````")
+                    promptBuilder.AppendLine("Text:")
                     promptBuilder.Append(chunkText)
-                    promptBuilder.AppendLine("````")
-                    promptBuilder.AppendLine("---")
-                    promptBuilder.AppendLine("Respond with only the fully updated content for this chunk; do not include fences.")
-                    messages = New List(Of Dictionary(Of String, String)) From {
-                        New Dictionary(Of String, String) From {{"role", "user"}, {"content", promptBuilder.ToString()}}
-                    }
+                    promptBuilder.AppendLine()
+                    promptBuilder.AppendLine("Output only the updated text exactly as it should appear, with no additional commentary or markdown.")
+                    messages.Add(New Dictionary(Of String, String) From {
+                    {"role", "user"},
+                    {"content", promptBuilder.ToString()}
+                })
                 Else
-                    ' continuation request
-                    messages = New List(Of Dictionary(Of String, String)) From {
-                        New Dictionary(Of String, String) From {{"role", "user"}, {"content", "Continue updating the rest of this chunk, appending only new content without repeating prior content."}}
-                    }
+                    ' Continuation request (no repeating)
+                    messages.Add(New Dictionary(Of String, String) From {
+                    {"role", "user"},
+                    {"content", "Continue updating the rest of this chunk, appending only new content without repeating prior content."}
+                })
                 End If
 
-                ' Call AI
+                ' Call the GPT model
                 Dim resp As String = Await AIcall.CallGPTCore(
-                    Globals.UserApiKey,
-                    Globals.AiModelSelection,
-                    messages,
-                    temperature:=0.0,
-                    ct:=CancellationToken.None
-                )
-                ' strip fences
-                resp = Regex.Replace(resp, "^\s*````\s*|\s*````\s*$", "", RegexOptions.Multiline).TrimEnd()
+                Globals.UserApiKey,
+                Globals.AiModelSelection,
+                messages,
+                temperature:=0.0,
+                ct:=CancellationToken.None
+            )
+                ' Remove any accidental code fences from response
+                resp = Regex.Replace(resp, "^\s*`{3,}\s*|\s*`{3,}\s*$", "", RegexOptions.Multiline).TrimEnd()
                 fullResult.Append(resp)
 
-                ' check if model likely truncated at MaxCompletion
-                Dim respTokens As Integer = AIcall.EstimateTokenCount(New List(Of Dictionary(Of String, String)) From {
+                ' Check if the response was truncated (by token count)
+                Dim respTokens As Integer = AIcall.EstimateTokenCount(
+                New List(Of Dictionary(Of String, String)) From {
                     New Dictionary(Of String, String) From {{"role", "assistant"}, {"content", resp}}
-                })
+                }
+            )
                 If respTokens < MaxCompletion Then Exit Do
                 isFirst = False
             Loop
@@ -1074,27 +1083,31 @@ $foundFiles
             updatedChunks.Add(fullResult.ToString())
         Next
 
-        ' ─── 6️⃣ Reassemble updated chunks ───
+        ' 6️⃣ Reassemble updated chunks, trimming the overlapping first line of each subsequent chunk
         Dim finalSb As New StringBuilder()
         For idx = 0 To updatedChunks.Count - 1
             Dim updLines = updatedChunks(idx).Replace(vbCr, "").Split(vbLf)
             If idx = 0 Then
+                ' Include all lines from the first chunk
                 For Each line In updLines
                     finalSb.AppendLine(line)
                 Next
             Else
+                ' Skip the first line of this chunk (overlap from previous)
                 For Each line In updLines.Skip(1)
                     finalSb.AppendLine(line)
                 Next
             End If
         Next
 
+        ' Finalize content and write to disk
         Dim finalContent = finalSb.ToString().TrimEnd() & vbCrLf
         File.WriteAllText(filePath, finalContent, Encoding.UTF8)
         Globals.FileContents(filePath) = finalContent
 
         Return finalContent
     End Function
+
 
     ' ================== BAT ===========================
 
