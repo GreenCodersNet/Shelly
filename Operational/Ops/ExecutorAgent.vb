@@ -184,7 +184,7 @@ Public Module ExecutorAgent
                     Case "GenerateLargeFileWithTextOrCode"
                         Dim topic = CStr(stepDef.Args("topic"))
                         Dim outputPath = CStr(stepDef.Args("outputPath"))
-                        Dim chunks = GetArgWithDefault(stepDef.Args, "totalChunks", 1)
+                        Dim chunks = GetArgWithDefault(stepDef.Args, "totalChunks", 5)
                         resultText = Await CustomFunctions.GenerateLargeFileWithTextOrCode(topic, outputPath, chunks)
 
                     Case "WriteInsideFileOrWindow"

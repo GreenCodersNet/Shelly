@@ -60,7 +60,8 @@ Module generateFiles
     Public Async Function GenerateLargeFileWithTextOrCode(
       filePath As String,
       userPrompt As String,
-      Optional totalChunks As Integer = 5,
+      Optional tokensPerChunk As Integer = 16000,
+      Optional totalChunks As Integer = 1,
       Optional ct As CancellationToken = Nothing
   ) As Task(Of Tuple(Of Boolean, String))
 
@@ -71,18 +72,23 @@ Module generateFiles
             Return Await GeneratePowerPoint(filePath, userPrompt, totalChunks, ct)
         End If
 
-        ' … your existing “text or Word” logic here …
         PrepareEmptyFile(filePath)
         GeneratedFileContent.Clear()
         For chunkIndex As Integer = 1 To totalChunks
             If ct.IsCancellationRequested Then Exit For
-            ' build your chunk prompt exactly as before…
+
             Dim sb As New StringBuilder()
             sb.AppendLine($"File: {Path.GetFileName(filePath)}")
             sb.AppendLine($"Instruction: {userPrompt}")
             sb.AppendLine($"Chunk: {chunkIndex}/{totalChunks}")
-            ' … tail context, etc. …
-            sb.AppendLine("Now generate only the next portion of the file as plain text, no fences or commentary.")
+            If GeneratedFileContent.Length > 0 Then
+                ' feed back last 500 chars as context
+                Dim tail = GeneratedFileContent.ToString()
+                If tail.Length > 500 Then tail = tail.Substring(tail.Length - 500)
+                sb.AppendLine("Previous content (last 500 chars):")
+                sb.AppendLine(tail)
+            End If
+            sb.AppendLine("Now generate only the next portion of the file as plain text, with no fences or commentary. In case of ***Word Documents***: please note that one ***Word*** page contains about 1.000 tokens.")
 
             Dim rawChunk As String = Await AIcall.CallGPTCore(
                 Globals.UserApiKey,
@@ -90,7 +96,7 @@ Module generateFiles
                 New List(Of Dictionary(Of String, String)) From {
                     New Dictionary(Of String, String) From {
                         {"role", "system"},
-                        {"content", "You are a file generator: produce text or code, no fences."}
+                        {"content", "You are a file generator: produce text or code, no fences. In case of ***Word Documents***: please note that one ***Word*** page contains about 1.000 tokens."}
                     },
                     New Dictionary(Of String, String) From {
                         {"role", "user"},

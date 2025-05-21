@@ -396,7 +396,7 @@ Partial Class Shelly
         UserInputBox.Name = "UserInputBox"
         UserInputBox.Size = New Size(308, 57)
         UserInputBox.TabIndex = 3
-        UserInputBox.Text = ""
+        UserInputBox.Text = "Your prompt goes here..."
         ' 
         ' Panel2
         ' 
