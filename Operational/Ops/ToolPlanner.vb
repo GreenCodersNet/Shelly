@@ -69,6 +69,7 @@ Public Module ToolPlanner
             },
             New ToolDefinition With {
               .Name = "GenerateLargeFileWithTextOrCode",
+              .Description = "Generate large files in multiple chunks.",
               .Parameters = New List(Of String) From {"topic:String", "outputPath:String", "totalChunks:Int32"}
             },
              New ToolDefinition With {
