@@ -153,17 +153,7 @@ Public Class Settings
         Me.ActiveControl = Nothing
     End Sub
 
-    Private Sub ProButton_Click(sender As Object, e As EventArgs) Handles ProButton.Click
-        Try
-            Process.Start(New ProcessStartInfo With {
-                .FileName = "https://greencoders.net/greencoders-labs/shelly-ai",
-                .UseShellExecute = True
-            })
-        Catch ex As Exception
-            Debug.WriteLine("[ERROR] Opening URL: " & ex.Message)
-        End Try
-        Me.ActiveControl = Nothing
-    End Sub
+
 
     Private Sub Settings_Shown(sender As Object, e As EventArgs) Handles Me.Shown
         ' Remove focus from all controls
@@ -224,5 +214,8 @@ Public Class Settings
 
     End Sub
 
-
+    Private Sub PowerShellButton_Click(sender As Object, e As EventArgs) Handles PowerShellButton.Click
+        RestoreWindow(PowerShellSafety)
+        Me.ActiveControl = Nothing
+    End Sub
 End Class

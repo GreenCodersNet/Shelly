@@ -40,7 +40,7 @@ Partial Class Settings
         Panel4 = New Panel()
         Label7 = New Label()
         AboutButton = New Button()
-        ProButton = New Button()
+        PowerShellButton = New Button()
         IAmHumanButton = New Button()
         Timer1 = New Timer(components)
         ToolTip1 = New ToolTip(components)
@@ -266,29 +266,29 @@ Partial Class Settings
         AboutButton.FlatStyle = FlatStyle.Flat
         AboutButton.Font = New Font("Bahnschrift SemiLight", 10F)
         AboutButton.ForeColor = Color.MediumOrchid
-        AboutButton.Location = New Point(28, 386)
+        AboutButton.Location = New Point(225, 386)
         AboutButton.Name = "AboutButton"
-        AboutButton.Size = New Size(115, 32)
+        AboutButton.Size = New Size(115, 64)
         AboutButton.TabIndex = 73
         AboutButton.Text = "About"
         AboutButton.UseVisualStyleBackColor = False
         ' 
-        ' ProButton
+        ' PowerShellButton
         ' 
-        ProButton.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
-        ProButton.BackColor = Color.Transparent
-        ProButton.Cursor = Cursors.Hand
-        ProButton.FlatAppearance.MouseDownBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
-        ProButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
-        ProButton.FlatStyle = FlatStyle.Flat
-        ProButton.Font = New Font("Bahnschrift SemiLight", 10F)
-        ProButton.ForeColor = Color.MediumOrchid
-        ProButton.Location = New Point(270, 386)
-        ProButton.Name = "ProButton"
-        ProButton.Size = New Size(115, 32)
-        ProButton.TabIndex = 74
-        ProButton.Text = " Shelly PRO"
-        ProButton.UseVisualStyleBackColor = False
+        PowerShellButton.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        PowerShellButton.BackColor = Color.Transparent
+        PowerShellButton.Cursor = Cursors.Hand
+        PowerShellButton.FlatAppearance.MouseDownBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
+        PowerShellButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
+        PowerShellButton.FlatStyle = FlatStyle.Flat
+        PowerShellButton.Font = New Font("Bahnschrift SemiLight", 10F)
+        PowerShellButton.ForeColor = Color.DodgerBlue
+        PowerShellButton.Location = New Point(28, 386)
+        PowerShellButton.Name = "PowerShellButton"
+        PowerShellButton.Size = New Size(183, 64)
+        PowerShellButton.TabIndex = 74
+        PowerShellButton.Text = "PowerShell Settings"
+        PowerShellButton.UseVisualStyleBackColor = False
         ' 
         ' IAmHumanButton
         ' 
@@ -310,7 +310,7 @@ Partial Class Settings
         ' 
         ' Timer1
         ' 
-        Timer1.Interval = 5000
+        Timer1.Interval = 2000
         ' 
         ' CheckBoxHints
         ' 
@@ -364,11 +364,11 @@ Partial Class Settings
         DefaultFolderWindow.FlatStyle = FlatStyle.Flat
         DefaultFolderWindow.Font = New Font("Bahnschrift SemiLight", 10F)
         DefaultFolderWindow.ForeColor = Color.MediumOrchid
-        DefaultFolderWindow.Location = New Point(149, 386)
+        DefaultFolderWindow.Location = New Point(354, 386)
         DefaultFolderWindow.Name = "DefaultFolderWindow"
-        DefaultFolderWindow.Size = New Size(115, 32)
+        DefaultFolderWindow.Size = New Size(115, 64)
         DefaultFolderWindow.TabIndex = 79
-        DefaultFolderWindow.Text = "AI Training"
+        DefaultFolderWindow.Text = "AI Instructions"
         DefaultFolderWindow.UseVisualStyleBackColor = False
         ' 
         ' Button1
@@ -427,7 +427,7 @@ Partial Class Settings
         Controls.Add(CheckBoxPromptRevision)
         Controls.Add(CheckBoxHints)
         Controls.Add(IAmHumanButton)
-        Controls.Add(ProButton)
+        Controls.Add(PowerShellButton)
         Controls.Add(AboutButton)
         Controls.Add(Label7)
         Controls.Add(Panel4)
@@ -450,6 +450,7 @@ Partial Class Settings
         Name = "Settings"
         StartPosition = FormStartPosition.WindowsDefaultBounds
         Text = "Shelly Settings"
+        TopMost = True
         Panel3.ResumeLayout(False)
         Panel3.PerformLayout()
         Panel4.ResumeLayout(False)
@@ -473,7 +474,7 @@ Partial Class Settings
     Friend WithEvents Panel4 As Panel
     Friend WithEvents Label7 As Label
     Friend WithEvents AboutButton As Button
-    Friend WithEvents ProButton As Button
+    Friend WithEvents PowerShellButton As Button
     Friend WithEvents IAmHumanButton As Button
     Friend WithEvents Timer1 As Timer
     Friend WithEvents ToolTip1 As ToolTip

@@ -207,6 +207,66 @@ Namespace My
                 Me("IsFirstRun") = value
             End Set
         End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("True")>  _
+        Public Property PowerShell_UseConstrainedMode() As Boolean
+            Get
+                Return CType(Me("PowerShell_UseConstrainedMode"),Boolean)
+            End Get
+            Set
+                Me("PowerShell_UseConstrainedMode") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("True")>  _
+        Public Property PowerShell_BlockNetworkCalls() As Boolean
+            Get
+                Return CType(Me("PowerShell_BlockNetworkCalls"),Boolean)
+            End Get
+            Set
+                Me("PowerShell_BlockNetworkCalls") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
+        Public Property PowerShell_BlockEnvVariables() As Boolean
+            Get
+                Return CType(Me("PowerShell_BlockEnvVariables"),Boolean)
+            End Get
+            Set
+                Me("PowerShell_BlockEnvVariables") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("True")>  _
+        Public Property PowerShell_BlockBackgroundJobs() As Boolean
+            Get
+                Return CType(Me("PowerShell_BlockBackgroundJobs"),Boolean)
+            End Get
+            Set
+                Me("PowerShell_BlockBackgroundJobs") = value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),
+         Global.System.Configuration.DefaultSettingValueAttribute("True")>
+        Public Property PowerShell_BlockSystemC() As Boolean
+            Get
+                Return CType(Me("PowerShell_BlockSystemC"), Boolean)
+            End Get
+            Set
+                Me("PowerShell_BlockSystemC") = Value
+            End Set
+        End Property
     End Class
 End Namespace
 

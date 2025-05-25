@@ -135,6 +135,17 @@ Partial Public Class Shelly
 
     Private Async Sub Shelly_Load(sender As Object, e As EventArgs) Handles MyBase.Load
 
+        If IsRunningAsAdmin() AndAlso SecurityFlags.EnforceNonAdminExecution Then
+            MessageBox.Show("Shelly must not be run with Administrator privileges for safety reasons." &
+                    vbCrLf & "Please restart the app without admin rights.",
+                    "Security Warning",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning)
+            Application.Exit()
+            Return
+        End If
+
+        Globals.LoadPowerShellSecuritySettings()
+
         Try
 
             '================ load right bottom corner ==================

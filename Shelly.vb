@@ -59,6 +59,7 @@ Partial Public Class Shelly
     Public isGoogleTranslateLoaded As Boolean = False ' Track if page is loaded
 
     Private skipNextPlainTextSegment As Boolean = False
+    Dim wasBlockedBySafety As Boolean = False
 
     Public Shared ReadOnly Property Instance As Shelly
         Get
@@ -142,9 +143,8 @@ Partial Public Class Shelly
                 Dim userQuestion As String = "You just finished running a task or multiple tasks based on the User Prompt. 
                 Can you do a very short summary of all the tasks that were completed based on Conversation History?" & Environment.NewLine &
                 "*** Use the 'FreeResponse' tool for this step. ***" & Environment.NewLine &
-                "Do so in a friendly, hilarious, dorky manner without repeating what the User asked, just ***a summary of what was done***." & Environment.NewLine &
-                "In case you found any errors or issues, please mention them in the summary and adopt a disappointed tone, 
-                telling that you tried your best and explained what happened (if you found the details). " & Environment.NewLine &
+                "Do so in a friendly manner without repeating what the User asked, just ***a summary of what was done***." & Environment.NewLine &
+                "In case you found any errors or issues, please mention them in the summary." & Environment.NewLine &
                 "If there is no relevant data in the Conversation History, just respond that you are ready to help."
 
                 Dim reply As String = Await AIBrainiac.CallGPTBrain(
@@ -377,23 +377,87 @@ Partial Public Class Shelly
         Return scripts
     End Function
 
+
+    Private Function IsPowerShellScriptSafe(script As String) As Boolean
+        Dim loweredScript = script.ToLowerInvariant()
+
+        ' 0) Always forbidden commands
+        Dim forbiddenCommandsAlways = {
+        "reg add", "reg delete", "reg query", "hklm", "hkey_local_machine",
+        "hkey_classes_root", "set-itemproperty", "new-itemproperty"
+    }
+        For Each cmd In forbiddenCommandsAlways
+            If loweredScript.Contains(cmd) Then Return False
+        Next
+
+        ' 1) Always-forbidden system folders (never allowed)
+        Dim forbiddenPaths = {
+        "c:\windows",
+        "c:\program files",
+        "c:\programdata",
+        "c:\system32",
+        "c:\boot",
+        "c:\recovery"
+    }
+        For Each path In forbiddenPaths
+            If loweredScript.Contains(path) Then
+                Return False
+            End If
+        Next
+
+        ' 2) Root-C:\ protection, only if the user has it enabled
+        If SecurityFlags.BlockSystemC Then
+            ' Block any C:\ path not under C:\Shelly\
+            If loweredScript.Contains("c:\") AndAlso
+           Not loweredScript.Contains("c:\shelly\") Then
+                Return False
+            End If
+        End If
+
+        ' 3) Optional user-configured checks
+        If SecurityFlags.BlockNetworkCalls Then
+            Dim netKeys = {"invoke-webrequest", "invoke-restmethod", "start-bitstransfer", "curl", "wget", "net.webclient"}
+            If netKeys.Any(Function(k) loweredScript.Contains(k)) Then Return False
+        End If
+
+        If SecurityFlags.BlockEnvVariableAccess Then
+            If loweredScript.Contains("$env:") Then Return False
+        End If
+
+        If SecurityFlags.BlockBackgroundJobs Then
+            Dim jobKeys = {"start-job", "invoke-command", "register-scheduledtask", "runspace", "new-thread"}
+            If jobKeys.Any(Function(k) loweredScript.Contains(k)) Then Return False
+        End If
+
+        Return True
+    End Function
+
+
+
     Public Async Function ExecutePowerShellScriptAsync(
     script As String,
     ct As CancellationToken
 ) As Task(Of Tuple(Of Boolean, String))
         LabelStatusUpdate.Text = "Executing PowerShell script..."
         Try
-            Dim modified = "$ErrorActionPreference = 'Stop'; " & script
-            Dim bytes() = Encoding.Unicode.GetBytes(modified)
+            Dim modifiedScript As String = "$ErrorActionPreference = 'Stop';" & Environment.NewLine
+
+            If SecurityFlags.ConstrainedLanguageMode Then
+                modifiedScript &= "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage';" & Environment.NewLine
+            End If
+
+            modifiedScript &= script
+
+            Dim bytes() = Encoding.Unicode.GetBytes(modifiedScript)
             Dim encoded = Convert.ToBase64String(bytes)
             Dim psi As New ProcessStartInfo With {
-            .FileName = "powershell.exe",
-            .Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " & encoded,
-            .UseShellExecute = False,
-            .RedirectStandardOutput = True,
-            .RedirectStandardError = True,
-            .CreateNoWindow = True
-        }
+                .FileName = "powershell.exe",
+                .Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " & encoded,
+                .UseShellExecute = False,
+                .RedirectStandardOutput = True,
+                .RedirectStandardError = True,
+                .CreateNoWindow = True
+            }
             Using proc As New Process()
                 proc.StartInfo = psi
                 proc.Start()
@@ -414,17 +478,24 @@ Partial Public Class Shelly
         End Try
     End Function
 
+    Private Function IsRunningAsAdmin() As Boolean
+        Dim identity = System.Security.Principal.WindowsIdentity.GetCurrent()
+        Dim principal = New System.Security.Principal.WindowsPrincipal(identity)
+        Return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
+    End Function
     Public Async Function ExecutePowerShellWithFixLoopAsync(
     originalScript As String,
     ct As CancellationToken
 ) As Task
-
+        Globals.LoadPowerShellSecuritySettings()
         Dim scriptToRun = originalScript
         Dim maxAttempts = 5
         Dim attempt = 0
-        Dim finalOutput = ""
-        Dim wasSuccessful = False
+        Dim finalOutput As String = ""
+        Dim wasSuccessful As Boolean = False
+        Dim wasBlockedBySafety As Boolean = False
 
+        ' Log start of the loop
         LogDebugInformation("N/A", conversationHistory,
         "[PS Loop Init] Starting PowerShell execution loop." & Environment.NewLine & originalScript,
         0, 0)
@@ -432,46 +503,157 @@ Partial Public Class Shelly
         While attempt < maxAttempts AndAlso Not ct.IsCancellationRequested
             attempt += 1
             LabelStatusUpdate.Text = $"Running PowerShell script… Attempt #{attempt}"
+
+            ' 🔒 SECURITY CHECK BEFORE EXECUTION
+            If Not IsPowerShellScriptSafe(scriptToRun) Then
+                wasBlockedBySafety = True
+
+                Dim blockedMsg =
+                "PowerShell script was blocked by safety measures." & Environment.NewLine &
+                "Access to system paths or critical commands is restricted by your current security settings."
+
+                ' --- SHOW block message, not the script itself ---
+                Using msgForm As New MessageForm(blockedMsg, "Script Blocked")
+                    msgForm.ShowDialog()
+                End Using
+
+                AppendResultToBox("❌ PowerShell script was blocked by safety measures.")
+                LogDebugInformation("N/A", conversationHistory,
+                "[SECURITY BLOCKED] Unsafe PowerShell script was blocked:" & Environment.NewLine & scriptToRun,
+                0, 0)
+
+                Exit While
+            End If
+
+            ' Execute the script
             Dim result = Await ExecutePowerShellScriptAsync(scriptToRun, ct)
             Dim success = result.Item1
             Dim raw = result.Item2
             Dim clean = RemoveCodeBlocks(raw).Trim()
 
+            ' 1) Constrained Language Mode block
+            If SecurityFlags.ConstrainedLanguageMode Then
+                Dim lowerClean = clean.ToLowerInvariant()
+                If lowerClean.Contains("language mode") OrElse lowerClean.Contains("fulllanguage") Then
+                    wasBlockedBySafety = True
+
+                    Dim msg = "❌ PowerShell script was blocked due to Constrained Language Mode."
+
+                    Using frm As New MessageForm(msg, "Script Blocked")
+                        frm.ShowDialog()
+                    End Using
+
+                    AppendResultToBox(msg)
+                    LogDebugInformation("N/A", conversationHistory,
+            "[SECURITY BLOCKED] Script blocked by Constrained Language Mode.",
+            0, 0)
+
+                    Exit While
+                End If
+            End If
+
+            ' 2) Network Access block
+            If SecurityFlags.BlockNetworkCalls Then
+                Dim lowerClean = clean.ToLowerInvariant()
+                Dim netKeys = {"invoke-webrequest", "invoke-restmethod", "start-bitstransfer", "curl", "wget", "net.webclient"}
+                If netKeys.Any(Function(k) lowerClean.Contains(k)) Then
+                    wasBlockedBySafety = True
+
+                    Dim msg = "❌ PowerShell script was blocked due to Network Access restriction."
+
+                    Using frm As New MessageForm(msg, "Script Blocked")
+                        frm.ShowDialog()
+                    End Using
+
+                    AppendResultToBox(msg)
+                    LogDebugInformation("N/A", conversationHistory,
+            "[SECURITY BLOCKED] Script blocked by Network Access restriction.",
+            0, 0)
+
+                    Exit While
+                End If
+            End If
+
+            ' 3) Environment Variable Access block
+            If SecurityFlags.BlockEnvVariableAccess Then
+                Dim lowerClean = clean.ToLowerInvariant()
+                If lowerClean.Contains("$env:") Then
+                    wasBlockedBySafety = True
+
+                    Dim msg = "❌ PowerShell script was blocked due to Environment Variable restriction."
+
+                    Using frm As New MessageForm(msg, "Script Blocked")
+                        frm.ShowDialog()
+                    End Using
+
+                    AppendResultToBox(msg)
+                    LogDebugInformation("N/A", conversationHistory,
+            "[SECURITY BLOCKED] Script blocked by Environment Variable restriction.",
+            0, 0)
+
+                    Exit While
+                End If
+            End If
+
+            ' 4) Background Jobs block
+            If SecurityFlags.BlockBackgroundJobs Then
+                Dim lowerClean = clean.ToLowerInvariant()
+                Dim jobKeys = {"start-job", "invoke-command", "register-scheduledtask", "runspace", "new-thread"}
+                If jobKeys.Any(Function(k) lowerClean.Contains(k)) Then
+                    wasBlockedBySafety = True
+
+                    Dim msg = "❌ PowerShell script was blocked due to Background Jobs restriction."
+
+                    Using frm As New MessageForm(msg, "Script Blocked")
+                        frm.ShowDialog()
+                    End Using
+
+                    AppendResultToBox(msg)
+                    LogDebugInformation("N/A", conversationHistory,
+                    "[SECURITY BLOCKED] Script blocked by Background Jobs restriction.",
+                    0, 0)
+
+                    Exit While
+                End If
+            End If
+
             If success Then
                 wasSuccessful = True
-                finalOutput = If(clean = "",
-                "✅ Task completed. Enjoy it!",
-                clean)
+                finalOutput = If(clean = "", "✅ Task completed. Enjoy it!", clean)
+
                 LogDebugInformation("N/A", conversationHistory,
                 "[PS Success] " & finalOutput, 0, CalculateTokenCount(finalOutput))
+
                 Exit While
             Else
                 LogDebugInformation("N/A", conversationHistory,
                 $"[PS Failure #{attempt}] {clean}", 0, CalculateTokenCount(clean))
+
                 If attempt < maxAttempts Then
                     ' Ask GPT for a fix
                     Dim fixPrompt =
                     $"I tried running this PowerShell script but got an error:{Environment.NewLine}{clean}{Environment.NewLine}" &
                     $"Script:{Environment.NewLine}```powershell{Environment.NewLine}{scriptToRun}{Environment.NewLine}```" &
                     Environment.NewLine & "Please return only a corrected script in a ```powershell block."
+
                     Dim fixResp = Await AIcall.CallGPTCore(
                     Globals.UserApiKey,
                     AImodel,
                     New List(Of Dictionary(Of String, String)) From {
                         New Dictionary(Of String, String) From {
-                            {"role", "system"},
-                            {"content", "You are a PowerShell troubleshooting assistant."}
+                            {"role", "system"}, {"content", "You are a PowerShell troubleshooting assistant."}
                         },
                         New Dictionary(Of String, String) From {
-                            {"role", "user"},
-                            {"content", fixPrompt}
+                            {"role", "user"}, {"content", fixPrompt}
                         }
                     },
                     Globals.temperature,
                     ct
                 )
+
                     LogDebugInformation("N/A", conversationHistory,
                     "[PS Repair GPT] " & fixResp, 0, CalculateTokenCount(fixResp))
+
                     Dim fixes = ExtractPowerShellScripts(fixResp)
                     If fixes.Count > 0 Then
                         scriptToRun = fixes(0)
@@ -482,23 +664,27 @@ Partial Public Class Shelly
             End If
         End While
 
-        ' Show only a final status
+        ' ── Final status ───────────────────────────────────
         If wasSuccessful Then
             Debug.WriteLine("2 ->" & finalOutput)
             AppendResultToBox(finalOutput)
             conversationHistory.Add(CreateHistoryMessage("assistant", finalOutput))
-        Else
+
+        ElseIf Not wasBlockedBySafety Then
             Dim msg = "❌ All attempts to run/fix PowerShell script failed."
             Debug.WriteLine("3 ->")
             AppendResultToBox(msg)
         End If
 
-        ' Keep history trimmed
+        ' Trim conversation history
         Await convHistory.TrimConversationHistoryByTokens_Dict(
         Globals.conversationHistory,
         Globals.MaxTotalTokens,
         If(wasSuccessful, finalOutput, "PowerShell failure."))
     End Function
+
+
+
 
 
     ' ================================================================
@@ -774,12 +960,6 @@ Partial Public Class Shelly
         RestoreWindow(ShellyAiResponseZoom)
     End Sub
 
-
-    ' ============================
-    '      ZOOM AND COME TO VIEW
-    '      ShellyAiResponseZoom
-    ' ============================
-
     ' ================================================================
     ' UPDATED FUNCTION: CancelTaskButton_Click (Enhanced Cancellation Handling)
     ' ================================================================
@@ -827,7 +1007,7 @@ Partial Public Class Shelly
                 Return
             End If
 
-            ' 🔴 STT Starts
+            ' STT Starts
             isSpeechActive = True
             ButtonUseSpeech.BackgroundImage = My.Resources.mic3
             ButtonUseSpeech.Enabled = False
@@ -837,7 +1017,7 @@ Partial Public Class Shelly
             Dim selectedDevice As Integer = Globals.UserAudioSelection
             Dim transcription As String = Await StartSpeechToText(selectedDevice)
 
-            ' ✅ Only submit real input
+            ' Only submit real input
             If Not String.IsNullOrWhiteSpace(transcription) AndAlso Not transcription.StartsWith("Error:") Then
                 UserInputBox.Text = transcription
                 Await HandleUserRequestAsync(cancellationTokenSource.Token)
@@ -851,7 +1031,7 @@ Partial Public Class Shelly
             LabelStatusUpdate.Text = "Oh no, we got an error"
             Debug.WriteLine($"Error: {ex.Message}")
         Finally
-            ' 🔵 STT Ends
+            ' STT Ends
             isSpeechActive = False
             ButtonUseSpeech.BackgroundImage = My.Resources.mic
             ButtonUseSpeech.Enabled = True
@@ -959,27 +1139,27 @@ Partial Public Class Shelly
 
     End Sub
 
-    Private Sub OpenInNewWindowToolStripMenuItem_Click(sender As Object, e As EventArgs) Handles OpenInNewWindowToolStripMenuItem.Click
-        If ShellyAiResponseZoom Is Nothing OrElse ShellyAiResponseZoom.IsDisposed Then
-            ' Create a new instance if it's not open or has been closed
-            RestoreWindow(ShellyAiResponseZoom)
-        Else
-            ' If the form is minimized, restore it
-            If ShellyAiResponseZoom.WindowState = FormWindowState.Minimized Then
-                ShellyAiResponseZoom.WindowState = FormWindowState.Normal
-            End If
-            ' Bring it to the front
-            ShellyAiResponseZoom.BringToFront()
-        End If
+    ' Make sure you have this field at class-level:
+    ' Private ShellyAiResponseZoom As ShellyAiResponseZoom
 
-        ' Update RichTextBox in zoom form with the latest text
+    Private Sub OpenInNewWindowToolStripMenuItem_Click(sender As Object, e As EventArgs) _
+    Handles OpenInNewWindowToolStripMenuItem.Click
+
+        ' If we don’t have a live instance (or it was disposed), create one
+        RestoreWindow(ShellyAiResponseZoom)
+
+        ' Always update its contents
         ShellyAiResponseZoom.RichTextBox1.Text = PSFunctResultsBox.Text
-        ActiveControl = Nothing
+
+        ' Clear focus so your context menu stays usable
+        Me.ActiveControl = Nothing
     End Sub
+
 
     Private Sub UserInputBox_TextChanged(sender As Object, e As EventArgs) Handles UserInputBox.TextChanged
 
     End Sub
+
     ' =======================
     ' Right-Click Menu
     ' =======================
@@ -1006,6 +1186,10 @@ Partial Public Class Shelly
     End Sub
 
     Private Sub WebView2Google_Click(sender As Object, e As EventArgs) Handles WebView2Google.Click
+
+    End Sub
+
+    Private Sub PSFunctResultsContextMenu2_Opening(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles PSFunctResultsContextMenu2.Opening
 
     End Sub
 

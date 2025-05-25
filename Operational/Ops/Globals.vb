@@ -209,5 +209,26 @@ Public Module Globals
         AICallCount += 1
     End Sub
 
+    Public Sub LoadPowerShellSecuritySettings()
+        With My.Settings
+            SecurityFlags.ConstrainedLanguageMode = .PowerShell_UseConstrainedMode
+            SecurityFlags.BlockNetworkCalls = .PowerShell_BlockNetworkCalls
+            SecurityFlags.BlockEnvVariableAccess = .PowerShell_BlockEnvVariables
+            SecurityFlags.BlockBackgroundJobs = .PowerShell_BlockBackgroundJobs
+            SecurityFlags.BlockSystemC = .PowerShell_BlockSystemC
+        End With
+    End Sub
+
+    Public Sub SavePowerShellSecuritySettings()
+        With My.Settings
+            .PowerShell_UseConstrainedMode = SecurityFlags.ConstrainedLanguageMode
+            .PowerShell_BlockNetworkCalls = SecurityFlags.BlockNetworkCalls
+            .PowerShell_BlockEnvVariables = SecurityFlags.BlockEnvVariableAccess
+            .PowerShell_BlockBackgroundJobs = SecurityFlags.BlockBackgroundJobs
+            .PowerShell_BlockSystemC = SecurityFlags.BlockSystemC
+            .Save()
+        End With
+    End Sub
+
 
 End Module

@@ -106,7 +106,7 @@ Module FormStyler
 
         ' Add a Paint event handler for the border
         AddHandler form.Paint, Sub(sender, e)
-                                   Using borderPen As New Pen(Color.FromArgb(28, 28, 28), 1)
+                                   Using borderPen As New Pen(Color.FromArgb(28, 28, 28), 3)
                                        e.Graphics.DrawRectangle(borderPen, 0, 0, form.ClientSize.Width - 1, form.ClientSize.Height - 1)
                                    End Using
                                End Sub
