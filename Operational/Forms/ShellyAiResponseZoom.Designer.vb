@@ -61,6 +61,7 @@ Partial Class ShellyAiResponseZoom
         Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Name = "ShellyAiResponseZoom"
         Text = "Shelly AI Reply"
+        TopMost = True
         ResumeLayout(False)
     End Sub
 

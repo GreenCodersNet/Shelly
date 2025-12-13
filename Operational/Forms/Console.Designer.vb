@@ -90,6 +90,7 @@ Partial Class Console
         MinimumSize = New Size(727, 469)
         Name = "Console"
         Text = "Console | v 1.0"
+        TopMost = True
         Panel1.ResumeLayout(False)
         Panel2.ResumeLayout(False)
         ResumeLayout(False)

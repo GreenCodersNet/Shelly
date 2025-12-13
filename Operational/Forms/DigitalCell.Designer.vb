@@ -114,6 +114,7 @@ Partial Class DigitalCell
         Name = "DigitalCell"
         StartPosition = FormStartPosition.WindowsDefaultBounds
         Text = "DigitalCell"
+        TopMost = True
         CType(PictureBox1, ComponentModel.ISupportInitialize).EndInit()
         ResumeLayout(False)
         PerformLayout()

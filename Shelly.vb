@@ -76,7 +76,51 @@ Partial Public Class Shelly
         AddHandler Me.Shown, AddressOf Shelly_Shown
     End Sub
 
+    ' Enhanced cleanup method with unique name
+    Public Sub CleanupApplicationResources()
+        Try
+            ' Cancel any ongoing operations
+            If cancellationTokenSource IsNot Nothing Then
+                cancellationTokenSource.Cancel()
+                cancellationTokenSource.Dispose()
+                cancellationTokenSource = Nothing
+            End If
 
+            ' Kill any running PowerShell processes
+            SyncLock processLock
+                If currentPowerShellProcess IsNot Nothing AndAlso Not currentPowerShellProcess.HasExited Then
+                    Try
+                        currentPowerShellProcess.Kill()
+                        currentPowerShellProcess.WaitForExit(3000)
+                    Catch ex As Exception
+                        Debug.WriteLine($"Error killing PowerShell process during cleanup: {ex.Message}")
+                    Finally
+                        currentPowerShellProcess = Nothing
+                    End Try
+                End If
+            End SyncLock
+
+            ' Cleanup AI modules
+            AIcall.Cleanup()
+            AIBrainiac.Cleanup()
+
+            ' Clear conversation history to free memory
+            conversationHistory?.Clear()
+            
+            ' Clear global caches
+            Globals.FileContents?.Clear()
+            Globals.GeneratedImages?.Clear()
+            Globals.TaskData?.Clear()
+            executedCalls?.Clear()
+
+            ' Clear debug logs
+            Globals.ClearDebugLogs()
+
+            Debug.WriteLine("[Cleanup] Resources cleaned up successfully")
+        Catch ex As Exception
+            Debug.WriteLine($"[Cleanup] Error during cleanup: {ex.Message}")
+        End Try
+    End Sub
 
     ' ==============================
     '       LOGIC & UTILITIES
@@ -95,15 +139,52 @@ Partial Public Class Shelly
         Return Regex.Replace(inputText, pattern, "").Trim()
     End Function
 
-    ' TRUNCATE TEXT
+    ' TRUNCATE TEXT - Enhanced for better token efficiency
     Public Shared Function TruncateTextToMaxTokens(text As String, maxTokens As Integer) As String
         If String.IsNullOrEmpty(text) Then Return text
-        Dim words As String() = text.Split({" "c, vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
-        If words.Length <= maxTokens Then
+        
+        ' More accurate token estimation
+        Dim words As String() = text.Split({" "c, vbCrLf, vbLf, vbTab}, StringSplitOptions.RemoveEmptyEntries)
+        Dim estimatedTokens As Integer = words.Length + (text.Length \ 6) ' Consider punctuation and structure
+        
+        If estimatedTokens <= maxTokens Then
             Return text
         End If
-        Return String.Join(" ", words.Take(maxTokens)) & "..."
+        
+        ' Calculate words to keep based on token limit
+        Dim wordsToKeep As Integer = CInt(maxTokens * 0.8) ' Conservative estimate
+        If wordsToKeep < words.Length Then
+            Return String.Join(" ", words.Take(wordsToKeep)) & "..."
+        End If
+        
+        Return text
     End Function
+
+    ' Enhanced conversation history trimming
+    Public Shared Sub OptimizeConversationHistory(ByRef conversationHistory As List(Of Dictionary(Of String, String)))
+        If conversationHistory Is Nothing OrElse conversationHistory.Count <= 5 Then Return
+        
+        ' Keep only the most recent and most relevant messages
+        Dim optimizedHistory As New List(Of Dictionary(Of String, String))
+        
+        ' Always keep system messages
+        For Each msg In conversationHistory
+            If msg.ContainsKey("role") AndAlso msg("role") = "system" Then
+                optimizedHistory.Add(msg)
+            End If
+        Next
+        
+        ' Keep last 10 user/assistant exchanges (20 messages total)
+        Dim userAssistantMsgs = conversationHistory.Where(Function(m) m.ContainsKey("role") AndAlso (m("role") = "user" OrElse m("role") = "assistant")).TakeLast(20).ToList()
+        
+        optimizedHistory.AddRange(userAssistantMsgs)
+        
+        ' Replace original with optimized version
+        conversationHistory.Clear()
+        conversationHistory.AddRange(optimizedHistory)
+        
+        Debug.WriteLine($"[OptimizeHistory] Reduced to {conversationHistory.Count} messages")
+    End Sub
 
     ' ============================
     '     MAIN BUTTON ("RUN")
@@ -180,7 +261,7 @@ Partial Public Class Shelly
     End Sub
 
     ' ================================
-    '  HandleUserRequestAsync  – v4.1
+    '  HandleUserRequestAsync  – v4.2
     '  (drop‑in replacement)
     ' ================================
     Private Async Function HandleUserRequestAsync(ct As CancellationToken) As Task
@@ -191,6 +272,10 @@ Partial Public Class Shelly
         End If
 
         Try
+            ' ── Reset typing flag and set active cancellation token ───
+            FileHandler.typingStopped = False
+            FileHandler.ActiveCancellationToken = ct
+            
             ' ── UI prep ───────────────────────────────────────────
             SetUIState(False)
             CancelTaskButton.Enabled = True
@@ -460,20 +545,48 @@ Partial Public Class Shelly
             }
             Using proc As New Process()
                 proc.StartInfo = psi
+                
+                ' Store process reference for potential cancellation
+                SyncLock processLock
+                    currentPowerShellProcess = proc
+                End SyncLock
+                
                 proc.Start()
                 Dim outTask = proc.StandardOutput.ReadToEndAsync(ct)
                 Dim errTask = proc.StandardError.ReadToEndAsync(ct)
                 Dim waitTask = Task.Run(Sub() proc.WaitForExit(), ct)
                 Await Task.WhenAll(outTask, errTask, waitTask)
                 Dim exitCode = proc.ExitCode
+                
+                ' Clear process reference
+                SyncLock processLock
+                    currentPowerShellProcess = Nothing
+                End SyncLock
+                
                 Return If(exitCode = 0,
                 Tuple.Create(True, outTask.Result),
                 Tuple.Create(False, errTask.Result))
             End Using
 
         Catch ex As OperationCanceledException
+            ' Ensure process cleanup on cancellation
+            SyncLock processLock
+                If currentPowerShellProcess IsNot Nothing AndAlso Not currentPowerShellProcess.HasExited Then
+                    Try
+                        currentPowerShellProcess.Kill()
+                        currentPowerShellProcess.WaitForExit(5000) ' Wait max 5 seconds
+                    Catch killEx As Exception
+                        Debug.WriteLine($"Error killing PowerShell process: {killEx.Message}")
+                    End Try
+                    currentPowerShellProcess = Nothing
+                End If
+            End SyncLock
             Return Tuple.Create(False, "Execution canceled by user.")
         Catch ex As Exception
+            ' Ensure process cleanup on any exception
+            SyncLock processLock
+                currentPowerShellProcess = Nothing
+            End SyncLock
             Return Tuple.Create(False, $"Exception: {ex.Message}")
         End Try
     End Function
@@ -965,6 +1078,9 @@ Partial Public Class Shelly
     ' ================================================================
     Private Sub CancelTaskButton_Click(sender As Object, e As EventArgs) Handles CancelTaskButton.Click
         Try
+            ' Stop any typing operations first
+            FileHandler.StopTyping()
+
             If cancellationTokenSource IsNot Nothing Then
                 cancellationTokenSource.Cancel()
                 Debug.WriteLine("[DEBUG] Cancellation requested.")
@@ -1046,14 +1162,128 @@ Partial Public Class Shelly
     ' ================================================================
     Private Async Sub Button4_Click(sender As Object, e As EventArgs) Handles Button4.Click
         Try
+            ' Set WebView color to default
             Await ExecuteScriptSafeAsync("setColorDefault();")
-            CleanupResources()
-            ClearDebugLogs()
+
+            ' Clear all UI elements FIRST
+            PSFunctResultsBox.Clear()
+            UserInputBox.Clear()
+            AIcommentBox.Clear()
+            If AIresponseErrorBox IsNot Nothing Then
+                AIresponseErrorBox.Clear()
+            End If
+            LabelStatusUpdate.Text = "Ready..."
+
+            ' Clear conversation history completely
+            conversationHistory.Clear()
+            conversationHistory = New List(Of Dictionary(Of String, String))()
+
+            ' Clear all global caches
+            Globals.FileContents.Clear()
+            Globals.GeneratedImages.Clear()
+            Globals.TaskData.Clear()
+            executedCalls.Clear()
+
+            ' Reset state variables
+            isTrainingSent = False
+            isVerificationDone = False
+            systemPrompt = Nothing
+            totalTokens = 0
+            lastRunMultiTask = False
+            skipNextPlainTextSegment = False
+            wasBlockedBySafety = False
+
+            If Globals.LastFileQuery IsNot Nothing Then
+                Globals.LastFileQuery = ""
+            End If
+
+            ' Cancel any ongoing operations
+            If cancellationTokenSource IsNot Nothing Then
+                cancellationTokenSource.Cancel()
+                cancellationTokenSource.Dispose()
+                cancellationTokenSource = Nothing
+            End If
+
+            ' Additional memory cleanup
+            PerformPeriodicCleanup()
+
+            ' Clear debug logs
+            Globals.ClearDebugLogs()
+
             ActiveControl = Nothing
+
+            Debug.WriteLine("[Button4] New conversation started - all data cleared")
+
         Catch ex As Exception
             Debug.WriteLine("Error in Button4_Click: " & ex.Message)
         End Try
         Me.ActiveControl = Nothing
+    End Sub
+
+    ' Fixed AppendResultToBox method to ensure proper line breaks
+    Public Sub AppendResultToBox(text As String)
+        Try
+            ' Ensure we add text with proper line breaks for conversation flow
+            If Not String.IsNullOrEmpty(PSFunctResultsBox.Text) AndAlso Not PSFunctResultsBox.Text.EndsWith(Environment.NewLine) Then
+                PSFunctResultsBox.AppendText(Environment.NewLine)
+            End If
+
+            PSFunctResultsBox.AppendText(text)
+
+            ' Ensure text ends with a line break for next message
+            If Not text.EndsWith(Environment.NewLine) Then
+                PSFunctResultsBox.AppendText(Environment.NewLine)
+            End If
+
+            PSFunctResultsBox.ScrollToCaret()
+        Catch ex As Exception
+            Debug.WriteLine($"Error appending result: {ex.Message}")
+        End Try
+    End Sub
+
+    Public Function CreateHistoryMessage(role As String, content As String) As Dictionary(Of String, String)
+        Return New Dictionary(Of String, String) From {
+            {"role", role},
+            {"content", content}
+        }
+    End Function
+
+    ' Add periodic cleanup method
+    Private Sub PerformPeriodicCleanup()
+        Try
+            ' Force garbage collection
+            GC.Collect()
+            GC.WaitForPendingFinalizers()
+            GC.Collect()
+
+            ' Optimize conversation history
+            OptimizeConversationHistory(conversationHistory)
+
+            ' Clear old entries from file cache
+            If Globals.FileContents.Count > 50 Then
+                Dim keysToRemove = Globals.FileContents.Keys.Take(Globals.FileContents.Count - 25).ToList()
+                For Each key In keysToRemove
+                    Globals.FileContents.Remove(key)
+                Next
+                Debug.WriteLine($"[Cleanup] Cleared {keysToRemove.Count} old file cache entries")
+            End If
+
+            ' Limit debug logs
+            If Globals.GetStoredLogs().Length > 500000 Then ' 500KB limit
+                Globals.ClearDebugLogs()
+                Debug.WriteLine("[Cleanup] Cleared debug logs due to size limit")
+            End If
+
+            ' Reset AI call count periodically
+            If AICallCount > 100 Then
+                ResetAICallCount()
+                Debug.WriteLine("[Cleanup] Reset AI call counter")
+            End If
+
+            Debug.WriteLine("[Cleanup] Periodic cleanup completed")
+        Catch ex As Exception
+            Debug.WriteLine($"[Cleanup] Error in periodic cleanup: {ex.Message}")
+        End Try
     End Sub
 
     Private Sub ShowSettings_Click(sender As Object, e As EventArgs) Handles ShowSettings.Click
@@ -1192,5 +1422,6 @@ Partial Public Class Shelly
     Private Sub PSFunctResultsContextMenu2_Opening(sender As Object, e As System.ComponentModel.CancelEventArgs) Handles PSFunctResultsContextMenu2.Opening
 
     End Sub
+
 
 End Class

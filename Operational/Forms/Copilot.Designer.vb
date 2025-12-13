@@ -165,6 +165,7 @@ Partial Class Copilot
         Name = "Copilot"
         StartPosition = FormStartPosition.WindowsDefaultBounds
         Text = "Copilot"
+        TopMost = True
         CType(WebViewAiOne, ComponentModel.ISupportInitialize).EndInit()
         Panel1.ResumeLayout(False)
         ResumeLayout(False)

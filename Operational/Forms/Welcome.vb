@@ -29,4 +29,8 @@
         End If
         Return MyBase.ProcessCmdKey(msg, keyData)
     End Function
+
+    Private Sub Label4_Click(sender As Object, e As EventArgs) Handles Label4.Click
+
+    End Sub
 End Class

@@ -119,7 +119,7 @@
   </resheader>
   <data name="RichTextBox1.Text" xml:space="preserve">
     <value>Shelly - Windows-Based AI Automation App
-Version: Free (Beta) Version 1.0.1
+Version: Free (Beta) Version 1.0.2
 Note: This Free (Beta) Version does not support 'Shared Memory' between Functions and PowerShell scripts. This is intended for token limitations. For more details and updates, visit: https://greencoders.net/greencoders-labs/Shelly-AI
 
 ---------------------------------------------------------

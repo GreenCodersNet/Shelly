@@ -33,8 +33,9 @@ Public Module Globals
     Public TaskCompleted As Boolean = True
     Public TaskData As New Dictionary(Of String, Object)
 
-    Public maxTokensPerChunk As Integer = 16000
-    Public maxInputTokensPerChunk As Integer = 128000
+    ' Token limits - dynamically adjusted based on model selection
+    Public maxTokensPerChunk As Integer = 32000        ' Increased for GPT-5 series
+    Public maxInputTokensPerChunk As Integer = 256000  ' Increased for GPT-5 series (256K context)
     Public LastUsedModel As String = ""
 
     ' ------------------------------------------------------------------------------

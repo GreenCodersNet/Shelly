@@ -22,12 +22,12 @@ Partial Class Welcome
     'Do not modify it using the code editor.
     <System.Diagnostics.DebuggerStepThrough()> _
     Private Sub InitializeComponent()
-        Dim resources As System.ComponentModel.ComponentResourceManager = New System.ComponentModel.ComponentResourceManager(GetType(Welcome))
         Label2 = New Label()
         CloseButton = New Button()
         Label1 = New Label()
         LearnMoreButton = New Button()
         Label3 = New Label()
+        Label4 = New Label()
         SuspendLayout()
         ' 
         ' Label2
@@ -68,11 +68,11 @@ Partial Class Welcome
         Label1.Font = New Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, CByte(0))
         Label1.ForeColor = SystemColors.ButtonFace
         Label1.ImageAlign = ContentAlignment.TopLeft
-        Label1.Location = New Point(56, 196)
+        Label1.Location = New Point(61, 283)
         Label1.Name = "Label1"
-        Label1.Size = New Size(804, 126)
+        Label1.Size = New Size(799, 42)
         Label1.TabIndex = 86
-        Label1.Text = resources.GetString("Label1.Text")
+        Label1.Text = "You can support Shelly’s development by donating, or by contributing code if you’re ready to get your hands dirty." & vbCrLf & "👉 Learn how you can make a real impact:"
         Label1.TextAlign = ContentAlignment.MiddleCenter
         ' 
         ' LearnMoreButton
@@ -103,8 +103,22 @@ Partial Class Welcome
         Label3.Name = "Label3"
         Label3.Size = New Size(56, 30)
         Label3.TabIndex = 88
-        Label3.Text = "1.0.1"
+        Label3.Text = "1.0.2"
         Label3.TextAlign = ContentAlignment.MiddleCenter
+        ' 
+        ' Label4
+        ' 
+        Label4.Anchor = AnchorStyles.None
+        Label4.AutoSize = True
+        Label4.Font = New Font("Segoe UI", 12F, FontStyle.Regular, GraphicsUnit.Point, CByte(0))
+        Label4.ForeColor = Color.Cyan
+        Label4.ImageAlign = ContentAlignment.TopLeft
+        Label4.Location = New Point(61, 205)
+        Label4.Name = "Label4"
+        Label4.Size = New Size(221, 63)
+        Label4.TabIndex = 89
+        Label4.Text = "What's new: " & vbCrLf & " - Improve PowerShell security" & vbCrLf & " - Small bugs fixes"
+        Label4.TextAlign = ContentAlignment.MiddleLeft
         ' 
         ' Welcome
         ' 
@@ -112,6 +126,7 @@ Partial Class Welcome
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         ClientSize = New Size(910, 470)
+        Controls.Add(Label4)
         Controls.Add(Label3)
         Controls.Add(LearnMoreButton)
         Controls.Add(Label1)
@@ -119,6 +134,7 @@ Partial Class Welcome
         Controls.Add(Label2)
         Name = "Welcome"
         Text = "Welcome"
+        TopMost = True
         ResumeLayout(False)
         PerformLayout()
     End Sub
@@ -128,4 +144,5 @@ Partial Class Welcome
     Friend WithEvents Label1 As Label
     Friend WithEvents LearnMoreButton As Button
     Friend WithEvents Label3 As Label
+    Friend WithEvents Label4 As Label
 End Class

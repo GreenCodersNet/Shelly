@@ -357,7 +357,7 @@ Partial Public Class Shelly
             WebView21 = Nothing
         End If
 
-        CleanupResources()
+        CleanupApplicationResources()
         ClearDebugLogs()
         Close()
     End Sub
@@ -546,55 +546,5 @@ Partial Public Class Shelly
     End Sub
 
     '<=====================================================================================================
-
-    Private Sub CleanupResources()
-        Try
-            ' Cancel running tasks
-            If cancellationTokenSource IsNot Nothing Then
-                cancellationTokenSource.Cancel()
-                cancellationTokenSource.Dispose()
-                cancellationTokenSource = Nothing
-            End If
-
-            If WebView2Google IsNot Nothing Then
-                WebView2Google.Dispose()
-                WebView2Google = Nothing
-            End If
-
-            ' Stop and dispose timers
-            If HintTime IsNot Nothing Then
-                HintTime.Stop()
-                HintTime.Dispose()
-            End If
-
-            ' Clear UI elements
-            UserInputBox.Clear()
-            AIcommentBox.Clear()
-            AIresponseErrorBox.Clear()
-            PSFunctResultsBox.Clear()
-            LabelStatusUpdate.Text = "Ready..."
-
-            ' Reset global state
-            Globals.ConsoleForm = Nothing
-            conversationHistory.Clear()
-            conversationHistory = New List(Of Dictionary(Of String, String))()
-            FileContents.Clear()
-            GeneratedImages.Clear()
-            TaskData.Clear()
-            totalTokens = 0
-            isTrainingSent = False
-            isVerificationDone = False
-            systemPrompt = Nothing
-            LastFileQuery = ""
-
-            ' Optional: full GC cleanup
-            GC.Collect()
-            GC.WaitForPendingFinalizers()
-
-            Debug.WriteLine("✅ CleanupResources: All resources cleaned up.")
-        Catch ex As Exception
-            Debug.WriteLine("❌ CleanupResources Exception: " & ex.Message)
-        End Try
-    End Sub
 
 End Class

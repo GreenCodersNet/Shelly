@@ -125,9 +125,19 @@ Public Module ExecutorAgent
                         End If
 
                     Case "GenerateBatchAndPs1File"
-                        Dim folder = CStr(stepDef.Args("outputFolder"))
-                        Dim query = CStr(stepDef.Args("userQuery"))
-                        resultText = Await CustomFunctions.GenerateBatchAndPs1File(folder, query)
+                        Dim folderObj As Object = Nothing
+                        Dim queryObj As Object = Nothing
+                        stepDef.Args.TryGetValue("outputFolder", folderObj)
+                        stepDef.Args.TryGetValue("userQuery", queryObj)
+
+                        Dim targetFolder As String = If(folderObj IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(folderObj.ToString()), folderObj.ToString(), "C:\Shelly")
+                        Dim userQuery As String = If(queryObj IsNot Nothing, queryObj.ToString(), String.Empty)
+
+                        If String.IsNullOrWhiteSpace(userQuery) Then
+                            resultText = "[Executor Error] GenerateBatchAndPs1File: Missing required argument 'userQuery'."
+                        Else
+                            resultText = Await CustomFunctions.GenerateBatchAndPs1File(targetFolder, userQuery)
+                        End If
 
                     Case "ReadFileAndAnswer"
                         Dim paths = CStr(stepDef.Args("filePaths"))
@@ -190,7 +200,7 @@ Public Module ExecutorAgent
                     Case "WriteInsideFileOrWindow"
                         Dim topic2 = CStr(stepDef.Args("topic"))
                         Dim chunks2 = Convert.ToInt32(stepDef.Args("totalChunks"))
-                        resultText = Await CustomFunctions.WriteInsideFileOrWindow(topic2, chunks2)
+                        resultText = Await CustomFunctions.WriteInsideFileOrWindow(topic2, chunks2, ct)
                     Case "UpdateFileByChunks"
                         Dim path = CStr(stepDef.Args("filePath"))
                         Dim instr = CStr(stepDef.Args("updateInstruction"))
@@ -210,8 +220,13 @@ Public Module ExecutorAgent
 
                     Case "SendMediaKey"
                         Dim keyName = CStr(stepDef.Args("keyName"))
-                        CustomFunctions.SendMediaKey(keyName)
+                        Await CustomFunctions.SendMediaKey(keyName)
                         resultText = $"Media key '{keyName}' sent."
+
+                    Case "SearchForTextInsideFiles"
+                        Dim paths = CStr(stepDef.Args("paths"))
+                        Dim searchWord = CStr(stepDef.Args("searchWord"))
+                        resultText = Await CustomFunctions.SearchForTextInsideFiles(paths, searchWord)
 
                     Case Else
                         resultText = $"[Executor] Unknown tool: {stepDef.Tool}"

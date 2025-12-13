@@ -68,10 +68,20 @@ Public Class Settings
 
     Public Sub PopulateAiModels()
         aiSelection.Items.Clear()
-        aiSelection.Items.Add("gpt-4o-mini")
-        aiSelection.Items.Add("gpt-4o")
-        aiSelection.Items.Add("gpt-4.1")
-        aiSelection.Items.Add("o3-mini")
+        
+        ' === GPT-5 Series (Frontier/Reasoning Models) ===
+        aiSelection.Items.Add("gpt-5.2")        ' Best for coding and agentic tasks
+        aiSelection.Items.Add("gpt-5.2-pro")    ' Smarter and more precise responses
+        aiSelection.Items.Add("gpt-5")          ' Intelligent reasoning model
+        aiSelection.Items.Add("gpt-5-mini")     ' Faster, cost-efficient GPT-5
+        aiSelection.Items.Add("gpt-5-nano")     ' Fastest, most cost-efficient GPT-5
+        
+        ' === GPT-4 Series (Non-Reasoning Models) ===
+        aiSelection.Items.Add("gpt-4.1")        ' Smartest non-reasoning model
+        aiSelection.Items.Add("gpt-4.1-mini")   ' Fast and cost-efficient
+        aiSelection.Items.Add("gpt-4.1-nano")   ' Fastest GPT-4.1 variant
+        aiSelection.Items.Add("gpt-4o")         ' Multimodal flagship
+        aiSelection.Items.Add("gpt-4o-mini")    ' Fast and affordable
     End Sub
 
     Public Shared Sub InitializeControls()
@@ -217,5 +227,13 @@ Public Class Settings
     Private Sub PowerShellButton_Click(sender As Object, e As EventArgs) Handles PowerShellButton.Click
         RestoreWindow(PowerShellSafety)
         Me.ActiveControl = Nothing
+    End Sub
+
+    Private Sub CheckBox2_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBox2.CheckedChanged
+        If CheckBox2.Checked Then
+            AssitantID.PasswordChar = ControlChars.NullChar ' Show actual input
+        Else
+            AssitantID.PasswordChar = "●" ' Mask the input
+        End If
     End Sub
 End Class

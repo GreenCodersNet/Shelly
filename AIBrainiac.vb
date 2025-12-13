@@ -27,6 +27,14 @@ Always:
  • Combine multiple steps into one comprehensive response when asked.
 ".Trim()
 
+    ' Add cleanup method for proper resource disposal
+    Public Sub Cleanup()
+        Try
+            httpClient?.Dispose()
+        Catch ex As Exception
+            Debug.WriteLine($"[AIBrainiac] Cleanup error: {ex.Message}")
+        End Try
+    End Sub
 
     Private Async Function RetrieveAssistant(
         apiKey As String,
@@ -35,6 +43,7 @@ Always:
 
         Dim endpoint = $"{ApiBaseUrl}/assistants/{assistantId}"
         Try
+            ' Clear headers before each request to prevent accumulation
             httpClient.DefaultRequestHeaders.Clear()
             httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {apiKey}")
             httpClient.DefaultRequestHeaders.Add("OpenAI-Beta", "assistants=v2")

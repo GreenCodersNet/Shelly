@@ -239,6 +239,7 @@ Partial Class DefaultFolder
         MinimumSize = New Size(757, 419)
         Name = "DefaultFolder"
         Text = "DefaultFolder"
+        TopMost = True
         Panel4.ResumeLayout(False)
         Panel4.PerformLayout()
         Panel1.ResumeLayout(False)

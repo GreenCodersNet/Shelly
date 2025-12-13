@@ -10,9 +10,9 @@
     <ImportedNamespaces>System.Data=False,System.Drawing=False,System.Windows.Forms=False,Microsoft.VisualBasic=True,System=True,System.Collections=True,System.Collections.Generic=True,System.Diagnostics=True,System.Linq=True,System.Xml.Linq=True,System.Threading.Tasks=True,MarketingAIapp=True</ImportedNamespaces>
     <ApplicationIcon>shelly-logo-package-app.ico</ApplicationIcon>
     <PackageIcon>shelly-logo-package-app.png</PackageIcon>
-    <Version>1.0.1</Version>
-    <AssemblyVersion>1.0.1</AssemblyVersion>
-    <FileVersion>1.0.1</FileVersion>
+    <Version>1.0.2</Version>
+    <AssemblyVersion>1.0.2</AssemblyVersion>
+    <FileVersion>1.0.2</FileVersion>
     <AssemblyName>$(AssemblyName)</AssemblyName>
     <RootNamespace>ShellyAI</RootNamespace>
     <PackageProjectUrl>https://greencoders.net/greencoders-labs/shelly-ai/</PackageProjectUrl>

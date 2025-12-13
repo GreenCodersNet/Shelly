@@ -1,7 +1,7 @@
-﻿' ###  AIimage.vb - v1.0.1 ### 
+﻿' ###  AIimage.vb - v1.0.2 ### 
 
 ' ##########################################################
-'  Shelly - v1.0.1
+'  Shelly - v1.0.2
 '  License: Creative Commons Attribution-NonCommercial (CC BY-NC)
 '  https://creativecommons.org/licenses/by-nc/4.0/
 '  © 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
@@ -16,6 +16,16 @@ Imports System.Text.RegularExpressions
 Imports System.Drawing.Imaging
 
 Module AIimage
+
+    ' ─── Vision Model Selection ───
+    Private Const VisionModelDefault As String = "gpt-4.1-mini"
+    ''' <summary>
+    ''' Returns the fixed vision-capable model used for image analysis regardless of user selection.
+    ''' </summary>
+    Private Function GetVisionModel() As String
+        Return VisionModelDefault
+    End Function
+
     Public Async Function CallImageGeneration(
     apiKey As String,
     imageRequests As List(Of ImageRequestData),
@@ -43,7 +53,7 @@ Module AIimage
                 ' For each image request in the list
                 For Each req In imageRequests
                     Dim payloadObj = New With {
-                    .model = model,         ' "dall-e-3" or "image-alpha-001" (DALL·E 2)
+                    .model = model,         ' "dall-e-3" or "gpt-image-1" for newer generation
                     .prompt = req.ImagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
                     .size = req.Size,       ' e.g. "1024x1024"
                     .quality = quality,     ' "hd" or "standard" (DALL·E 3)
@@ -105,6 +115,7 @@ Module AIimage
         Public Property Style As String = ""
         Public Property ImageName As String = "myimage.jpg"
     End Class
+    
     Public Function ConversationHistoryToPlainText() As String
         Dim sb As New StringBuilder()
 
@@ -163,6 +174,11 @@ Module AIimage
         IncrementAICallCount()
 
         Dim apiUrl As String = "https://api.openai.com/v1/chat/completions"
+        
+        ' Use the best available vision model based on user's selection
+        Dim visionModel As String = GetVisionModel()
+        Debug.WriteLine($"[AIimage] Using vision model: {visionModel}")
+        
         Using client As New HttpClient()
             client.DefaultRequestHeaders.Add("Authorization", "Bearer " & apiKey)
 
@@ -171,18 +187,18 @@ Module AIimage
                                        " Do not include a full description of the image; only include details directly relevant to the query."
 
             Dim requestBody As New With {
-            .model = "gpt-4o-mini", ' Use 4o-mini for reading images
-            .messages = New Object() {
-                New With {
-                    .role = "user",
-                    .content = New Object() {
-                        New With {.type = "text", .text = analysisPrompt},
-                        New With {.type = "image_url", .image_url = New With {.url = "data:image/png;base64," & imageBase64}}
+                .model = visionModel,
+                .messages = New Object() {
+                    New With {
+                        .role = "user",
+                        .content = New Object() {
+                            New With {.type = "text", .text = analysisPrompt},
+                            New With {.type = "image_url", .image_url = New With {.url = "data:image/png;base64," & imageBase64}}
+                        }
                     }
-                }
-            },
-            .max_tokens = 1200
-        }
+                },
+                .max_tokens = 2000
+            }
 
             Dim jsonContent As String = JsonConvert.SerializeObject(requestBody)
 

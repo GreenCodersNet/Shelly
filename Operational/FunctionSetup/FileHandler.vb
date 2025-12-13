@@ -22,6 +22,9 @@ Module FileHandler
     Public originalWindow As IntPtr = IntPtr.Zero
     Public originalControl As IntPtr = IntPtr.Zero
     Public typingStopped As Boolean = False
+    
+    ' Shared cancellation token source for long-running operations
+    Public ActiveCancellationToken As CancellationToken = CancellationToken.None
 
     ' Win32 API declarations needed for focus and window management.
     <DllImport("user32.dll")>

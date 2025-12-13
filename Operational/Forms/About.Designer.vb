@@ -61,6 +61,7 @@ Partial Class About
         Icon = CType(resources.GetObject("$this.Icon"), Icon)
         Name = "About"
         Text = "About"
+        TopMost = True
         ResumeLayout(False)
     End Sub
 

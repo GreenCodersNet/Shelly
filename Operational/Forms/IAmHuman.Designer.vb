@@ -116,6 +116,7 @@ Partial Class IAmHuman
         Name = "IAmHuman"
         StartPosition = FormStartPosition.WindowsDefaultBounds
         Text = "I Am Human"
+        TopMost = True
         CType(PictureBox1, ComponentModel.ISupportInitialize).EndInit()
         ResumeLayout(False)
         PerformLayout()

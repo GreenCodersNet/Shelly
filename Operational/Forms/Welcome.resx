@@ -117,12 +117,4 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="Label1.Text" xml:space="preserve">
-    <value>Your support is essential to our mission: building one powerful, user-focused app for every task.
-We're working hard on Shelly PRO, which will bring AI-powered task automation to Mac and Linux systems as well.
-
-You can support Shelly’s development by donating, or by contributing code if you’re ready to get your hands dirty.
-
-👉 Learn how you can make a real impact:</value>
-  </data>
 </root>

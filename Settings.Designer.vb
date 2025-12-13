@@ -50,6 +50,7 @@ Partial Class Settings
         Button1 = New Button()
         Label9 = New Label()
         Label8 = New Label()
+        CheckBox2 = New CheckBox()
         Panel3.SuspendLayout()
         Panel4.SuspendLayout()
         SuspendLayout()
@@ -225,9 +226,10 @@ Partial Class Settings
         AssitantID.BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         AssitantID.BorderStyle = BorderStyle.None
         AssitantID.Font = New Font("Bahnschrift SemiLight", 10F)
-        AssitantID.ForeColor = Color.White
+        AssitantID.ForeColor = Color.LightGreen
         AssitantID.Location = New Point(5, 6)
         AssitantID.Name = "AssitantID"
+        AssitantID.PasswordChar = "●"c
         AssitantID.PlaceholderText = "E.g: asst_nVXv4Yx30LrJT"
         AssitantID.Size = New Size(405, 17)
         AssitantID.TabIndex = 70
@@ -237,6 +239,7 @@ Partial Class Settings
         Panel4.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
         Panel4.BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         Panel4.BorderStyle = BorderStyle.FixedSingle
+        Panel4.Controls.Add(CheckBox2)
         Panel4.Controls.Add(AssitantID)
         Panel4.Location = New Point(26, 237)
         Panel4.Name = "Panel4"
@@ -413,6 +416,25 @@ Partial Class Settings
         Label8.Size = New Size(1, 100)
         Label8.TabIndex = 83
         ' 
+        ' CheckBox2
+        ' 
+        CheckBox2.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        CheckBox2.Appearance = Appearance.Button
+        CheckBox2.BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
+        CheckBox2.CheckAlign = ContentAlignment.MiddleCenter
+        CheckBox2.FlatAppearance.BorderColor = Color.Gray
+        CheckBox2.FlatStyle = FlatStyle.Flat
+        CheckBox2.Font = New Font("Arial Narrow", 15.75F, FontStyle.Regular, GraphicsUnit.Point, CByte(0))
+        CheckBox2.ForeColor = Color.White
+        CheckBox2.Location = New Point(380, -2)
+        CheckBox2.Margin = New Padding(0)
+        CheckBox2.Name = "CheckBox2"
+        CheckBox2.Size = New Size(38, 33)
+        CheckBox2.TabIndex = 84
+        CheckBox2.Text = "👁‍🗨"
+        CheckBox2.TextAlign = ContentAlignment.MiddleCenter
+        CheckBox2.UseVisualStyleBackColor = False
+        ' 
         ' Settings
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
@@ -484,4 +506,5 @@ Partial Class Settings
     Friend WithEvents Button1 As Button
     Friend WithEvents Label9 As Label
     Friend WithEvents Label8 As Label
+    Friend WithEvents CheckBox2 As CheckBox
 End Class
