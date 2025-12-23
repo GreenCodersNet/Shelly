@@ -17,6 +17,18 @@ Imports System.Drawing.Imaging
 
 Module AIimage
 
+    ' ─── Image Generation Model Selection ───
+    Private Const ImageGenerationModel As String = "dall-e-3"
+    Private Const ImageGenerationQuality As String = "standard" ' "hd" or "standard"
+    
+    ''' <summary>
+    ''' Returns the fixed image generation model (DALL-E 3) regardless of user selection.
+    ''' This ensures image generation always uses the correct API endpoint.
+    ''' </summary>
+    Private Function GetImageGenerationModel() As String
+        Return ImageGenerationModel
+    End Function
+    
     ' ─── Vision Model Selection ───
     Private Const VisionModelDefault As String = "gpt-4.1-mini"
     ''' <summary>
@@ -28,14 +40,18 @@ Module AIimage
 
     Public Async Function CallImageGeneration(
     apiKey As String,
-    imageRequests As List(Of ImageRequestData),
-    Optional model As String = "dall-e-3",
-    Optional quality As String = "hd"
+    imageRequests As List(Of ImageRequestData)
 ) As Task(Of List(Of String))
 
         IncrementAICallCount()
 
         Dim imagesList As New List(Of String)()
+
+        ' ⚠️ CRITICAL: Always use DALL-E 3 for image generation (ignore user's selected model)
+        Dim model As String = GetImageGenerationModel()
+        Dim quality As String = ImageGenerationQuality
+        
+        Debug.WriteLine($"[AIimage] Using image generation model: {model} with quality: {quality}")
 
         Dim historyText As String = ConversationHistoryToPlainText()
 
@@ -46,21 +62,26 @@ Module AIimage
         End If
 
         Using httpClient As New HttpClient()
+            httpClient.Timeout = TimeSpan.FromMinutes(2) ' Increase timeout for image generation
+            
             Try
                 ' The endpoint for DALL·E image generation
                 Dim apiEndpoint As String = "https://api.openai.com/v1/images/generations"
 
                 ' For each image request in the list
                 For Each req In imageRequests
+                    Debug.WriteLine($"[AIimage] Generating image with prompt: {req.ImagePrompt.Substring(0, Math.Min(50, req.ImagePrompt.Length))}...")
+                    
                     Dim payloadObj = New With {
-                    .model = model,         ' "dall-e-3" or "gpt-image-1" for newer generation
-                    .prompt = req.ImagePrompt & historyText & vbCrLf & " *** Never add text inside images! ***",
-                    .size = req.Size,       ' e.g. "1024x1024"
-                    .quality = quality,     ' "hd" or "standard" (DALL·E 3)
-                    .n = 1                  ' We generate 1 image per request
-                }
+                        .model = model,
+                        .prompt = req.ImagePrompt & " *** Never add text inside images! ***",
+                        .size = req.Size,
+                        .quality = quality,
+                        .n = 1
+                    }
 
                     Dim payloadJson As String = JsonConvert.SerializeObject(payloadObj, Formatting.Indented)
+                    Debug.WriteLine($"[AIimage] Request payload: {payloadJson}")
 
                     ' Wrap StringContent in a Using block
                     Using requestBody As New StringContent(payloadJson, Encoding.UTF8, "application/json")
@@ -74,34 +95,54 @@ Module AIimage
                         If response.IsSuccessStatusCode Then
                             ' Parse the JSON response
                             Dim responseContent As String = Await response.Content.ReadAsStringAsync()
+                            Debug.WriteLine($"[AIimage] API Response: {responseContent}")
+                            
                             Dim jObj = JObject.Parse(responseContent)
 
                             Dim dataArray = jObj("data")
-                            If dataArray IsNot Nothing Then
+                            If dataArray IsNot Nothing AndAlso dataArray.HasValues Then
                                 For Each item In dataArray
                                     Dim imageUrl = item("url")?.ToString()
-                                    If imageUrl IsNot Nothing Then
+                                    If Not String.IsNullOrWhiteSpace(imageUrl) Then
                                         imagesList.Add(imageUrl)
+                                        Debug.WriteLine($"[AIimage] Successfully generated image: {imageUrl}")
                                     End If
                                 Next
+                            Else
+                                Debug.WriteLine("[AIimage] ERROR: No 'data' array in response or array is empty")
                             End If
                         Else
-                            ' If not success, log an error
+                            ' If not success, log detailed error
                             Dim errorMessage = $"[Image Generation Error] {response.StatusCode}"
                             Dim details = Await response.Content.ReadAsStringAsync()
                             errorMessage &= vbCrLf & $"Details: {details}"
 
-                            ' Show in Form1's RichTextBox or wherever you prefer
-                            Debug.WriteLine($"[>] AI Image generator ERROR: Failed - {errorMessage}")
+                            Debug.WriteLine($"[AIimage] API ERROR: {errorMessage}")
+                            
+                            ' Also append to error box if available
+                            If Shelly.Instance IsNot Nothing Then
+                                Shelly.Instance.AIresponseErrorBox.AppendText(errorMessage & Environment.NewLine)
+                            End If
                         End If
                     End Using
                 Next
 
             Catch ex As Exception
                 ' If any exception occurs during the loop or request
-                Debug.WriteLine("An error occurred while generating images: " & ex.Message & Environment.NewLine)
+                Dim errorMsg = $"[AIimage] Exception during image generation: {ex.Message}{Environment.NewLine}Stack: {ex.StackTrace}"
+                Debug.WriteLine(errorMsg)
+                
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.AIresponseErrorBox.AppendText(errorMsg & Environment.NewLine)
+                End If
             End Try
         End Using
+
+        If imagesList.Count = 0 Then
+            Debug.WriteLine("[AIimage] WARNING: No images were generated")
+        Else
+            Debug.WriteLine($"[AIimage] Successfully generated {imagesList.Count} image(s)")
+        End If
 
         ' Return all collected image URLs
         Return imagesList

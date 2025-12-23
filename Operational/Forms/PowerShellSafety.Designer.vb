@@ -37,6 +37,7 @@ Partial Class PowerShellSafety
         LabelWarning = New Label()
         ToolTipSecurity = New ToolTip(components)
         CheckBoxBlockSystemC = New CheckBox()
+        CheckStartProcess = New CheckBox()
         SuspendLayout()
         ' 
         ' CheckBoxConstrainedMode
@@ -195,12 +196,28 @@ Partial Class PowerShellSafety
         CheckBoxBlockSystemC.Text = "Block Sytem File Changes (C:\)"
         CheckBoxBlockSystemC.UseVisualStyleBackColor = True
         ' 
+        ' CheckStartProcess
+        ' 
+        CheckStartProcess.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        CheckStartProcess.AutoSize = True
+        CheckStartProcess.Checked = True
+        CheckStartProcess.CheckState = CheckState.Checked
+        CheckStartProcess.Font = New Font("Bahnschrift SemiLight", 10F)
+        CheckStartProcess.ForeColor = Color.White
+        CheckStartProcess.Location = New Point(69, 260)
+        CheckStartProcess.Name = "CheckStartProcess"
+        CheckStartProcess.Size = New Size(154, 21)
+        CheckStartProcess.TabIndex = 84
+        CheckStartProcess.Text = "Block Start Process"
+        CheckStartProcess.UseVisualStyleBackColor = True
+        ' 
         ' PowerShellSafety
         ' 
         AutoScaleDimensions = New SizeF(7F, 15F)
         AutoScaleMode = AutoScaleMode.Font
         BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         ClientSize = New Size(817, 331)
+        Controls.Add(CheckStartProcess)
         Controls.Add(CheckBoxBlockSystemC)
         Controls.Add(LabelWarning)
         Controls.Add(Label2)
@@ -236,4 +253,5 @@ Partial Class PowerShellSafety
     Friend WithEvents LabelWarning As Label
     Friend WithEvents ToolTipSecurity As ToolTip
     Friend WithEvents CheckBoxBlockSystemC As CheckBox
+    Friend WithEvents CheckStartProcess As CheckBox
 End Class

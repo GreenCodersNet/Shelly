@@ -19,4 +19,26 @@ Public Class PlanStep
 
     <JsonProperty("args")>
     Public Property Args As Dictionary(Of String, Object)
+
+    ' Aliases for AI models that use name/arguments schema
+    <JsonProperty("name")>
+    Private Property ToolAlias As String
+        Get
+            Return Tool
+        End Get
+        Set(value As String)
+            If String.IsNullOrEmpty(Tool) Then Tool = value
+        End Set
+    End Property
+
+    <JsonProperty("arguments")>
+    Private Property ArgsAlias As Dictionary(Of String, Object)
+        Get
+            Return Args
+        End Get
+        Set(value As Dictionary(Of String, Object))
+            If Args Is Nothing OrElse Args.Count = 0 Then Args = value
+        End Set
+    End Property
+
 End Class

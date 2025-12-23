@@ -117,7 +117,8 @@ Module AIcall
         model As String,
         messages As List(Of Dictionary(Of String, String)),
         temperature As Double,
-        ct As CancellationToken
+        ct As CancellationToken,
+        Optional jsonMode As Boolean = False
     ) As Task(Of String)
 
         IncrementAICallCount()
@@ -133,6 +134,15 @@ Module AIcall
                 {"role", "system"},
                 {"content", ShellySystemPrompt}
             })
+        End If
+
+        ' 1.5️⃣ JSON Mode Safety Check (OpenAI Requirement)
+        If jsonMode Then
+            Dim systemMsg = messages.FirstOrDefault(Function(m) m("role") = "system")
+            If systemMsg IsNot Nothing AndAlso Not systemMsg("content").Contains("JSON") Then
+                ' Append instruction to ensure API doesn't reject the request
+                systemMsg("content") &= vbLf & "IMPORTANT: You must output valid JSON."
+            End If
         End If
 
         ' 2️⃣ Get model-specific limits
@@ -193,6 +203,11 @@ Module AIcall
                     payload("frequency_penalty") = 0.0
                     payload("presence_penalty") = 0.0
                     payload("max_tokens") = finalMaxTokens
+                    
+                    ' ✅ JSON Mode Support
+                    If jsonMode Then
+                        payload("response_format") = New Dictionary(Of String, String) From {{"type", "json_object"}}
+                    End If
                     
                     Debug.WriteLine($"[AIcall] Using standard model parameters for {model}")
                 End If

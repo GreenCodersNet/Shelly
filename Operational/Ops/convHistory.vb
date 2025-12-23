@@ -25,14 +25,7 @@ Module convHistory
     End Class
 
     Public Function CountTokens(ByVal text As String) As Integer
-        If String.IsNullOrEmpty(text) Then Return 0
-
-        ' Approximation: Words + short code tokens (markdown etc.)
-        Dim words As Integer = text.Split({" "c, vbTab, vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries).Length
-        Dim punctuationWeight As Integer = Regex.Matches(text, "[{}[\]()=<>:;,.!@#%^&*_\-+/\\|~`""']+").Count
-
-        ' Each 4 chars roughly = 1 token in OpenAI; we use a hybrid
-        Return words + (text.Length \ 6) + punctuationWeight \ 4
+        Return Shelly.CalculateTokenCount(text)
     End Function
 
 

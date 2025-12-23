@@ -12,6 +12,20 @@ Imports NAudio.Wave ' Ensure NAudio is referenced in your project
 Public Module Globals
 
     Public OriginalUserRequest As String = ""
+
+    ' ========================== CONTEXT-AWARE ITERATION (NEW) ==============================
+    ''' <summary>
+    ''' Unique identifier for the current user request session
+    ''' Used to track step outputs across iterations
+    ''' </summary>
+    Public CurrentRequestId As String = ""
+
+    ''' <summary>
+    ''' Current iteration number in the intelligent retry loop
+    ''' Starts at 0 for each new request, increments with each planning cycle
+    ''' </summary>
+    Public CurrentIteration As Integer = 0
+
     ' ========================== Conversation & API Keys ==============================
     ' We keep the conversationHistory as before
     Public Const MaxTotalTokens As Integer = 7000 ' Adjust based on your requirements
@@ -217,6 +231,8 @@ Public Module Globals
             SecurityFlags.BlockEnvVariableAccess = .PowerShell_BlockEnvVariables
             SecurityFlags.BlockBackgroundJobs = .PowerShell_BlockBackgroundJobs
             SecurityFlags.BlockSystemC = .PowerShell_BlockSystemC
+            ' TODO: Add .PowerShell_BlockStartProcess to My.Settings, then uncomment:
+            ' SecurityFlags.BlockStartProcess = .PowerShell_BlockStartProcess
         End With
     End Sub
 
@@ -227,9 +243,22 @@ Public Module Globals
             .PowerShell_BlockEnvVariables = SecurityFlags.BlockEnvVariableAccess
             .PowerShell_BlockBackgroundJobs = SecurityFlags.BlockBackgroundJobs
             .PowerShell_BlockSystemC = SecurityFlags.BlockSystemC
+            ' TODO: Add .PowerShell_BlockStartProcess to My.Settings, then uncomment:
+            ' .PowerShell_BlockStartProcess = SecurityFlags.BlockStartProcess
             .Save()
         End With
     End Sub
 
+    Public Class PowerShellExecutionRecord
+        Public Property Attempt As Integer
+        Public Property ExitCode As Integer
+        Public Property StdOut As String
+        Public Property StdErr As String
+        Public Property Blocked As Boolean
+        Public Property FinishedAt As DateTimeOffset
+        Public Property ScriptHash As String
+        Public Property Duration As TimeSpan
+        Public Property RemediationNote As String ' Added for remediation tracking
+    End Class
 
 End Module

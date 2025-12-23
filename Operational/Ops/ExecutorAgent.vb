@@ -1,353 +1,423 @@
-﻿' ###  ExecutorAgent.vb - v1.0.1 ### 
+﻿' ###  ExecutorAgent.vb - v2.0.0 ###
+' Executes plan steps and tracks outcomes
 
-' ##########################################################
-'  Shelly - v1.0.1
-'  License: Creative Commons Attribution-NonCommercial (CC BY-NC)
-'  https://creativecommons.org/licenses/by-nc/4.0/
-'  © 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
-' ##########################################################
-
-' ********** FOR NEW FUNCTIONS UPDATE: **********
-'   -> ToolPlanner.vb
-'   -> CustomFunctionsEngine.vb
-'   -> CustomFunctions.vb
-'   -> ExecutorAgent.vb
-'   -> CustomFunctionsEngine.VB (FOR CONSOLE HELP)
-' ***********************************************
-
-Imports System.Text
-Imports System.Text.RegularExpressions
 Imports System.Threading
-Imports DocumentFormat.OpenXml.Office2019.Drawing
+Imports System.Text
 Imports Newtonsoft.Json
-Imports ShellyAI.Shelly
-Imports System.IO
+Imports System.Collections.Generic
+Imports System.Linq
+Imports System.Text.RegularExpressions
 
 Public Module ExecutorAgent
 
-    ' Keeps signatures of tool+arg combinations executed in this request
-    Private ReadOnly executedSteps As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+    ' Tracks executed tool+args hashes within the current request to avoid repeats
+    Private ReadOnly executionLedger As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
+    ''' <summary>
+    ''' Resets the execution ledger for a new session
+    ''' </summary>
+    Public Sub ResetExecutionLedger()
+        executionLedger.Clear()
+        GlobalOutcomeTracker.Instance.Clear()
+        Debug.WriteLine("[ExecutorAgent] Execution ledger reset")
+    End Sub
+
+    ''' <summary>
+    ''' Executes a plan (list of steps) sequentially
+    ''' </summary>
     Public Async Function ExecutePlanAsync(
-    plan As List(Of PlanStep),
-    ct As CancellationToken
-) As Task(Of List(Of String))
+        plan As List(Of PlanStep),
+        ct As CancellationToken
+    ) As Task
 
-        ' List to store results of each step
-        Dim stepResults As New List(Of String)()
+        If plan Is Nothing OrElse plan.Count = 0 Then
+            Debug.WriteLine("[ExecutorAgent] Empty plan provided")
+            Return
+        End If
 
-        ' Remember the raw text of the last result we showed
-        Dim lastResultText As String = ""
+        Debug.WriteLine($"[ExecutorAgent] Executing plan with {plan.Count} steps")
 
-        ' Reset for this user prompt - using the module-level field
-        executedSteps.Clear()
-        Dim idx As Integer = 0
-        For Each originalStep In plan.OrderBy(Function(p) p.StepIndex)
-            idx += 1
-            If ct.IsCancellationRequested Then Exit For
+        For i = 0 To plan.Count - 1
+            If ct.IsCancellationRequested Then
+                Debug.WriteLine("[ExecutorAgent] Execution cancelled")
+                Exit For
+            End If
 
-            ' 1️⃣ Optionally refine step #2 and beyond
-            Dim stepDef As PlanStep = originalStep
+            Dim currentStep = plan(i)
+            currentStep.StepIndex = i + 1
 
-            stepDef = Await RefinePlanStepAsync(stepDef, ct) ' change to RefinePlanStepAsync for CallGPTCore
-            Debug.WriteLine($"[ExecutorAgent] Refined step #{idx}: {stepDef.Tool} args: {JsonConvert.SerializeObject(stepDef.Args)}")
+            Try
+                Await ExecuteSingleStep(currentStep, ct)
+            Catch ex As Exception
+                Debug.WriteLine($"[ExecutorAgent] Step {i + 1} failed: {ex.Message}")
+                ' Continue with next step even if one fails
+            End Try
+        Next
 
+        Debug.WriteLine("[ExecutorAgent] Plan execution complete")
+    End Function
 
-            ' 2️⃣ Signature & de-dup (unchanged)
-            Dim signature = $"{stepDef.Tool}|{JsonConvert.SerializeObject(stepDef.Args)}"
-            If executedSteps.Contains(signature) Then Continue For
-            executedSteps.Add(signature)
+    ''' <summary>
+    ''' Executes a single step from the plan
+    ''' </summary>
+    Private Async Function ExecuteSingleStep(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task
 
-            Shelly.Instance.LabelStatusUpdate.Text = $"Step {stepDef.StepIndex}: {stepDef.Tool}"
+        ' Safety check for null tool
+        If String.IsNullOrWhiteSpace(planStep.Tool) Then
+            Debug.WriteLine($"[ExecutorAgent] Step {planStep.StepIndex} has no tool name.")
+            StepOutputManager.Instance.RecordStepOutput(
+                planStep.StepIndex,
+                "Unknown",
+                "[ERROR] Tool name is missing or empty.",
+                False
+            )
+            Return
+        End If
 
-            '============== Pre-step AI check & optional plan refinement ================
-            If idx > 1 Then
-                Try
-                    Dim prompt As String =
-                    "You just generated a step and are about to execute the next one. " &
-                    "Please check the conversation history and, if this segment should be tweaked based on what’s already run or even changed, " &
-                    "return an updated JSON PlanStep:" & Environment.NewLine &
-                    JsonConvert.SerializeObject(stepDef) & "otherwise return the original json unchanged. ****DO NOT INLUDE ANY COMMENTS OR EXPLANATIONS OR THE APP WILL FAIL!***"
+        ' Normalize known argument aliases before validation
+        If planStep.Tool.Equals("ChangeOrSetVolume", StringComparison.OrdinalIgnoreCase) Then
+            If Not planStep.Args.ContainsKey("volumePercentage") Then
+                If planStep.Args.ContainsKey("level") Then
+                    planStep.Args("volumePercentage") = planStep.Args("level")
+                ElseIf planStep.Args.ContainsKey("volume") Then
+                    planStep.Args("volumePercentage") = planStep.Args("volume")
+                End If
+            End If
+        ElseIf planStep.Tool.Equals("WebSearchAndRespondBasedOnPageContent", StringComparison.OrdinalIgnoreCase) Then
+            ' Accept planner aliases: query -> promptQuery, site -> siteName, question <-> query
+            If Not planStep.Args.ContainsKey("promptQuery") AndAlso planStep.Args.ContainsKey("query") Then
+                planStep.Args("promptQuery") = planStep.Args("query")
+            End If
+            If Not planStep.Args.ContainsKey("siteName") AndAlso planStep.Args.ContainsKey("site") Then
+                planStep.Args("siteName") = planStep.Args("site")
+            End If
+            If Not planStep.Args.ContainsKey("query") AndAlso planStep.Args.ContainsKey("question") Then
+                planStep.Args("query") = planStep.Args("question")
+            End If
+            If Not planStep.Args.ContainsKey("question") AndAlso planStep.Args.ContainsKey("query") Then
+                planStep.Args("question") = planStep.Args("query")
+            End If
+        ElseIf planStep.Tool.Equals("TakePrintScreenOrScreenShot", StringComparison.OrdinalIgnoreCase) Then
+            If Not planStep.Args.ContainsKey("OutputPath") Then
+                Dim altKeys = New String() {"outputPath", "path", "folder", "folderPath"}
+                For Each k In altKeys
+                    If planStep.Args.ContainsKey(k) Then
+                        planStep.Args("OutputPath") = planStep.Args(k)
+                        Exit For
+                    End If
+                Next
+            End If
+        ElseIf planStep.Tool.Equals("GenerateBatchAndPs1File", StringComparison.OrdinalIgnoreCase) Then
+            ' Accept planner aliases for userQuery: query, prompt, request, description, task
+            If Not planStep.Args.ContainsKey("userQuery") Then
+                Dim altKeys = New String() {"query", "prompt", "request", "description", "task", "instruction", "script"}
+                For Each k In altKeys
+                    If planStep.Args.ContainsKey(k) Then
+                        planStep.Args("userQuery") = planStep.Args(k)
+                        Debug.WriteLine($"[ExecutorAgent] GenerateBatchAndPs1File: Mapped '{k}' to 'userQuery'")
+                        Exit For
+                    End If
+                Next
+            End If
+            ' Accept planner aliases for outputFolder: folder, path, outputPath, directory
+            If Not planStep.Args.ContainsKey("outputFolder") Then
+                Dim altKeys = New String() {"folder", "path", "outputPath", "directory", "folderPath"}
+                For Each k In altKeys
+                    If planStep.Args.ContainsKey(k) Then
+                        planStep.Args("outputFolder") = planStep.Args(k)
+                        Debug.WriteLine($"[ExecutorAgent] GenerateBatchAndPs1File: Mapped '{k}' to 'outputFolder'")
+                        Exit For
+                    End If
+                Next
+            End If
+        End If
 
-                    Dim aiResponse As String = Await AIBrainiac.CallGPTBrain(
-                    Globals.UserApiKey,
-                    prompt,
-                    Globals.AssistantId,
-                    Globals.conversationHistory
+        Dim argsHash = ExecutionOutcome.ComputeArgsHash(planStep.Args)
+        Dim ledgerKey = $"{planStep.Tool}|{argsHash}"
+
+        Dim attemptNumber = RetryStrategy.MaxRetriesPerTool - RetryStrategy.GetRemainingRetries(planStep.Tool) + 1
+
+        Dim outcome As New ExecutionOutcome With {
+            .StepIndex = planStep.StepIndex,
+            .ToolName = planStep.Tool,
+            .Arguments = New Dictionary(Of String, Object)(planStep.Args),
+            .ArgsHash = argsHash,
+            .StartTime = DateTimeOffset.UtcNow,
+            .AttemptNumber = Math.Max(attemptNumber, 1),
+            .IsPowerShell = planStep.Tool.Equals("ExecutePowerShellScript", StringComparison.OrdinalIgnoreCase)
+        }
+
+        Try
+            Debug.WriteLine($"[ExecutorAgent] Executing step {planStep.StepIndex}: {planStep.Tool}")
+
+            ' Halt if retries exhausted
+            If Not RetryStrategy.CanRetry(planStep.Tool) Then
+                outcome.Status = OutcomeStatus.Failed
+                outcome.StandardError = $"[RETRY LIMIT] {planStep.Tool} reached {RetryStrategy.MaxRetriesPerTool} attempts."
+                outcome.Complete(outcome.Status)
+                GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
+                StepOutputManager.Instance.RecordStepOutput(planStep.StepIndex, planStep.Tool, outcome.StandardError, False)
+                Return
+            End If
+
+            ' Skip duplicate successful executions
+            If executionLedger.Contains(ledgerKey) OrElse GlobalOutcomeTracker.Instance.HasSuccessfulOutcome(planStep.Tool, argsHash) Then
+                Dim skipMsg = "[SKIPPED] Identical tool+args already succeeded."
+                outcome.Status = OutcomeStatus.Success
+                outcome.StandardOutput = skipMsg
+                outcome.Complete(outcome.Status)
+                GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
+                StepOutputManager.Instance.RecordStepOutput(planStep.StepIndex, planStep.Tool, skipMsg, True)
+                Debug.WriteLine($"[ExecutorAgent] Skipped duplicate for {ledgerKey}")
+                Return
+            End If
+
+            executionLedger.Add(ledgerKey)
+
+            ' Validate step first
+            Dim validationResult = ToolSchemaValidator.ValidateStep(planStep)
+            If Not validationResult.IsValid Then
+                outcome.Status = OutcomeStatus.ValidationFailed
+                outcome.StandardError = String.Join("; ", validationResult.Errors)
+                outcome.Complete(OutcomeStatus.ValidationFailed)
+                GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
+
+                ' ✅ FIX: Record validation failure in StepOutputManager so AI can see it!
+                StepOutputManager.Instance.RecordStepOutput(
+                    planStep.StepIndex,
+                    planStep.Tool,
+                    $"[VALIDATION FAILED] {outcome.StandardError}",
+                    False
                 )
 
-                    Dim m As Match = Regex.Match(aiResponse, "(\{[\s\S]*\})")
-                    If m.Success Then
-                        stepDef = JsonConvert.DeserializeObject(Of PlanStep)(m.Groups(1).Value)
-                        Debug.WriteLine($"[PreStepAI] Step updated to: {stepDef.Tool} args {JsonConvert.SerializeObject(stepDef.Args)}")
-                    End If
-
-                Catch ex As Exception
-                    Debug.WriteLine($"[PreStepAI] Failed: {ex.Message}")
-                End Try
+                RetryStrategy.RecordRetry(planStep.Tool)
+                Debug.WriteLine($"[ExecutorAgent] Validation failed: {outcome.StandardError}")
+                Return
             End If
-            '===========================================================================
 
+            ' Execute based on tool type
             Dim resultText As String = ""
-            Try
-                Select Case stepDef.Tool
 
-                    Case "ExecutePowerShellScript", "StartOrRunApplicationByName", "TakePrintScreenOrScreenShot"
-                        ' 1) Build the raw AI‐generated script
-                        Dim rawScript As String
-                        If stepDef.Tool = "ExecutePowerShellScript" Then
-                            rawScript = CStr(stepDef.Args("script"))
-                        ElseIf stepDef.Tool = "StartOrRunApplicationByName" Then
-                            Dim appName = CStr(stepDef.Args("appName")).Replace("'", "''")
-                            rawScript = CustomFunctions.StartOrRunApplicationByNameScript & Environment.NewLine &
-                    $"StartOrRunApplicationByName -appName '{appName}'"
-                        Else  ' TakePrintScreenOrScreenShot
-                            Dim outputPath = CStr(stepDef.Args("outputPath")).Replace("'", "''")
-                            rawScript = CustomFunctions.TakePrintScreenOrScreenShotScript & Environment.NewLine &
-                    $"TakePrintScreenOrScreenShot -OutputPath '{outputPath}'"
-                        End If
+            Select Case planStep.Tool.ToLower()
+                Case "readfileandanswer"
+                    resultText = Await ExecuteReadFileAndAnswer(planStep, ct)
 
-                        ' 2) Only unescape \n, \r, \t—not every backslash sequence
-                        Dim script As String = UnescapeLiterals(rawScript)
+                Case "imageanswer"
+                    resultText = Await ExecuteImageAnswer(planStep, ct)
 
-                        ' 3) Run it
-                        Await Shelly.Instance.ExecutePowerShellWithFixLoopAsync(script, ct)
-                        Continue For
+                Case "searchfortextinsidefiles"
+                    resultText = Await ExecuteSearchForTextInsideFiles(planStep, ct)
 
-                    Case "FreeResponse"
-                        ' Only show this if it's not just repeating the last result
-                        Dim candidate = CStr(stepDef.Args("text"))
-                        If candidate <> lastResultText Then
-                            resultText = candidate
-                        Else
-                            ' skip redundant echo
-                            Continue For
-                        End If
+                Case "generateimages"
+                    resultText = Await ExecuteGenerateImages(planStep, ct)
 
-                    Case "GenerateBatchAndPs1File"
-                        Dim folderObj As Object = Nothing
-                        Dim queryObj As Object = Nothing
-                        stepDef.Args.TryGetValue("outputFolder", folderObj)
-                        stepDef.Args.TryGetValue("userQuery", queryObj)
+                Case "executepowershellscript"
+                    resultText = Await ExecutePowerShellScript(planStep, ct)
 
-                        Dim targetFolder As String = If(folderObj IsNot Nothing AndAlso Not String.IsNullOrWhiteSpace(folderObj.ToString()), folderObj.ToString(), "C:\Shelly")
-                        Dim userQuery As String = If(queryObj IsNot Nothing, queryObj.ToString(), String.Empty)
+                Case "freeresponse"
+                    resultText = ExecuteFreeResponse(planStep)
 
-                        If String.IsNullOrWhiteSpace(userQuery) Then
-                            resultText = "[Executor Error] GenerateBatchAndPs1File: Missing required argument 'userQuery'."
-                        Else
-                            resultText = Await CustomFunctions.GenerateBatchAndPs1File(targetFolder, userQuery)
-                        End If
+                Case Else
+                    ' Try to execute as generic custom function
+                    resultText = Await ExecuteCustomFunction(planStep, ct)
+            End Select
 
-                    Case "ReadFileAndAnswer"
-                        Dim paths = CStr(stepDef.Args("filePaths"))
-                        Dim q = CStr(stepDef.Args("query"))
-                        resultText = Await CustomFunctions.ReadFileAndAnswer(paths, q)
+            ' Record success/failure
+            outcome.StandardOutput = resultText
+            outcome.PolicyBlocked = resultText.Contains("[POLICY]")
+            outcome.Status = If(resultText.Contains("[ERROR]") OrElse resultText.Contains("[POLICY]") OrElse resultText.StartsWith("❌"), OutcomeStatus.Failed, OutcomeStatus.Success)
+            If planStep.Tool.Equals("ExecutePowerShellScript", StringComparison.OrdinalIgnoreCase) AndAlso planStep.Args.ContainsKey("script") Then
+                outcome.SetScriptAndHash(CStr(planStep.Args("script")))
+                If resultText.StartsWith("✅") Then
+                    outcome.ExitCode = 0
+                    outcome.StandardOutput = resultText
+                Else
+                    outcome.ExitCode = 1
+                    outcome.StandardError = resultText
+                    outcome.RemediationNote = "PS failed or empty output; adjust script"
+                End If
+            End If
+            outcome.Complete(outcome.Status)
 
-                    Case "WebSearchAndRespondBasedOnPageContent"
-                        Dim promptQ = CStr(stepDef.Args("promptQuery"))
-                        Dim site = CStr(stepDef.Args("siteName"))
-                        Dim q2 = CStr(stepDef.Args("query"))
-                        resultText = Await CustomFunctions.WebSearchAndRespondBasedOnPageContent(promptQ, site, q2, ct)
+            ' Track outcome
+            GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
 
-                    Case "ReadWebPageAndRespondBasedOnPageContent"
-                        Dim urlObj As Object = Nothing
-                        Dim queryObj As Object = Nothing
-                        If stepDef.Args.TryGetValue("url", urlObj) AndAlso stepDef.Args.TryGetValue("query", queryObj) Then
-                            Dim url = CStr(urlObj)
-                            Dim query = CStr(queryObj)
-                            resultText = Await CustomFunctions.ReadWebPageAndRespondBasedOnPageContent(url, query, ct)
-                        Else
-                            resultText = "[Executor Error] ReadWebPageAndRespondBasedOnPageContent: Missing required arguments 'url' or 'query'."
-                            Debug.WriteLine(resultText)
-                        End If
+            ' Store in step output manager
+            StepOutputManager.Instance.RecordStepOutput(
+                planStep.StepIndex,
+                planStep.Tool,
+                resultText,
+                outcome.Status = OutcomeStatus.Success
+            )
 
-                    Case "GenerateImages"
-                        Dim imgPromptObj As Object = Nothing
-                        Dim numObj As Object = Nothing
-                        Dim styleObj As Object = Nothing
-                        Dim folderObj As Object = Nothing
-                        If stepDef.Args.TryGetValue("imagePrompt", imgPromptObj) AndAlso
-                           stepDef.Args.TryGetValue("numImages", numObj) AndAlso
-                           stepDef.Args.TryGetValue("style", styleObj) AndAlso
-                           stepDef.Args.TryGetValue("folderPath", folderObj) Then
-
-                            Dim imgPrompt = CStr(imgPromptObj)
-                            Dim num = Convert.ToInt32(numObj)
-                            Dim style = CStr(styleObj)
-                            Dim folder = CStr(folderObj)
-                            resultText = Await CustomFunctions.GenerateImages(imgPrompt, num, style, folder)
-                        Else
-                            resultText = "[Executor Error] GenerateImages: Missing required arguments in Args dictionary."
-                            Debug.WriteLine(resultText)
-                        End If
-
-                    Case "ImageAnswer"
-                        Dim imgs = CStr(stepDef.Args("imagePaths"))
-                        Dim iq = CStr(stepDef.Args("query"))
-                        resultText = Await CustomFunctions.ImageAnswer(imgs, iq)
-
-                    Case "CheckMyScreenAndAnswer"
-                        Dim query = CStr(stepDef.Args("query"))
-                        resultText = Await CustomFunctions.CheckMyScreenAndAnswer(query)
-
-                    Case "GenerateLargeFileWithTextOrCode"
-                        Dim topic = CStr(stepDef.Args("topic"))
-                        Dim outputPath = CStr(stepDef.Args("outputPath"))
-                        Dim chunks = GetArgWithDefault(stepDef.Args, "totalChunks", 1)
-                        resultText = Await CustomFunctions.GenerateLargeFileWithTextOrCode(topic, outputPath, chunks)
-
-                    Case "WriteInsideFileOrWindow"
-                        Dim topic2 = CStr(stepDef.Args("topic"))
-                        Dim chunks2 = Convert.ToInt32(stepDef.Args("totalChunks"))
-                        resultText = Await CustomFunctions.WriteInsideFileOrWindow(topic2, chunks2, ct)
-                    Case "UpdateFileByChunks"
-                        Dim path = CStr(stepDef.Args("filePath"))
-                        Dim instr = CStr(stepDef.Args("updateInstruction"))
-                        Dim updatedCode As String = Await CustomFunctions.UpdateFileByChunks(path, instr)
-                        If updatedCode.StartsWith("[ERROR]") Then
-                            resultText = updatedCode
-                        Else
-                            File.WriteAllText(path, updatedCode, System.Text.Encoding.UTF8)
-                            Globals.FileContents(path) = updatedCode
-                            resultText = $"File successfully updated: {path}"
-                        End If
-
-                    Case "ChangeOrSetVolume"
-                        Dim volume = Convert.ToInt32(stepDef.Args("volumePercentage"))
-                        CustomFunctions.ChangeOrSetVolume(volume)
-                        resultText = $"Volume set to {volume}%."
-
-                    Case "SendMediaKey"
-                        Dim keyName = CStr(stepDef.Args("keyName"))
-                        Await CustomFunctions.SendMediaKey(keyName)
-                        resultText = $"Media key '{keyName}' sent."
-
-                    Case "SearchForTextInsideFiles"
-                        Dim paths = CStr(stepDef.Args("paths"))
-                        Dim searchWord = CStr(stepDef.Args("searchWord"))
-                        resultText = Await CustomFunctions.SearchForTextInsideFiles(paths, searchWord)
-
-                    Case Else
-                        resultText = $"[Executor] Unknown tool: {stepDef.Tool}"
-                End Select
-
-            Catch ex As Exception
-                resultText = $"[Executor Error] {stepDef.Tool}: {ex.Message}"
-            End Try
-
-
-            ' 3️⃣ Display & log (unchanged)
-            If Not String.IsNullOrWhiteSpace(resultText) Then
-                ShellyOps.AppendResultToBox(resultText)
-                Shelly.LogDebugInformation("N/A", Globals.conversationHistory, resultText, 0, Shelly.CalculateTokenCount(resultText))
-                Await convHistory.TrimConversationHistoryByTokens_Dict(Globals.conversationHistory, Globals.MaxTotalTokens, resultText)
-                lastResultText = resultText
+            If outcome.Status = OutcomeStatus.Failed Then
+                RetryStrategy.RecordRetry(planStep.Tool)
             End If
 
-            stepResults.Add(resultText)
-            Await Task.Delay(50, ct)
-        Next
+            Debug.WriteLine($"[ExecutorAgent] Step {planStep.StepIndex} completed: {outcome.Status}")
 
-        Shelly.Instance.LabelStatusUpdate.Text = "All planned tasks completed."
+        Catch ex As OperationCanceledException
+            outcome.Status = OutcomeStatus.Cancelled
+            outcome.StandardError = "Cancelled by user"
+            outcome.Complete(OutcomeStatus.Cancelled)
+            GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
 
-        ' Return the list of results
-        Return stepResults
+        Catch ex As Exception
+            outcome.Status = OutcomeStatus.Failed
+            outcome.StandardError = ex.Message
+            outcome.Complete(OutcomeStatus.Failed)
+            GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
+
+            ' ✅ FIX: Record execution failure in StepOutputManager so AI can see it!
+            StepOutputManager.Instance.RecordStepOutput(
+                planStep.StepIndex,
+                planStep.Tool,
+                $"[EXECUTION FAILED] {ex.Message}",
+                False
+            )
+
+            RetryStrategy.RecordRetry(planStep.Tool)
+            Debug.WriteLine($"[ExecutorAgent] Step exception: {ex.Message}")
+        End Try
     End Function
 
+    ' ========================================
+    ' INDIVIDUAL STEP EXECUTORS
+    ' ========================================
 
-    Public Function UnescapeLiterals(input As String) As String
-        Dim result = input
-        result = result.Replace("\r\n", Environment.NewLine)
-        result = result.Replace("\n", Environment.NewLine)
-        result = result.Replace("\r", Environment.NewLine)
-        result = result.Replace("\t", vbTab)
-        Return result
+    Private Async Function ExecuteReadFileAndAnswer(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
+
+        Dim paths = CStr(planStep.Args("filePaths"))
+        Dim query = CStr(planStep.Args("query"))
+        Return Await CustomFunctions2.ReadFileAndAnswer(paths, query)
     End Function
 
-    ' Helper function to safely get parameters with defaults
-    Private Function GetArgWithDefault(Of T)(args As Dictionary(Of String, Object), key As String, defaultValue As T) As T
-        Dim value As Object = Nothing
-        If args.TryGetValue(key, value) Then
-            Try
-                Return CType(value, T)
-            Catch ex As Exception
-                Debug.WriteLine($"[WARNING] Cannot convert parameter '{key}' to {GetType(T).Name}, using default: {defaultValue}")
-                Return defaultValue
-            End Try
-        Else
-            Debug.WriteLine($"[WARNING] Missing parameter '{key}', using default: {defaultValue}")
-            Return defaultValue
-        End If
+    Private Async Function ExecuteImageAnswer(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
+
+        Dim imgs = CStr(planStep.Args("imagePaths"))
+        Dim query = CStr(planStep.Args("query"))
+        Return Await CustomFunctions.ImageAnswer(imgs, query)
     End Function
 
-    Private Async Function RefinePlanStepAsync(
-    planStep As PlanStep,
-    ct As CancellationToken
-) As Task(Of PlanStep)
+    Private Async Function ExecuteSearchForTextInsideFiles(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
 
-        ' Build a single string of the entire conversation history
-        Dim historyText As New StringBuilder()
-        For Each msg In Globals.conversationHistory
-            historyText.AppendLine($"{msg("role").ToUpper()}: {msg("content")}")
-            historyText.AppendLine()
-        Next
+        Dim paths = CStr(planStep.Args("paths"))
+        Dim searchWord = CStr(planStep.Args("searchText"))
+        Return Await CustomFunctions2.SearchForTextInsideFiles(paths, searchWord)
+    End Function
 
-        ' System prompt explaining the refinement task
-        Dim sysPrompt =
-        "You are a JSON Validator.The fllowing JSON will be used by ChatGPT inorder to perform a task." & Environment.NewLine &
-        "Given the full conversation history and a single PlanStep JSON, " &
-        "replace any placeholder argument values (e.g. file paths, URLs, Content) with the actual " &
-        "values found in that history. You may change the prompt/query (text) to better match the Conversation History to ensure the best possible result." & Environment.NewLine &
-        "If no change is needed, return the original PlanStep JSON."
+    Private Async Function ExecuteGenerateImages(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
 
-        ' Serialize the PlanStep to send to the model
-        Dim stepJson = JsonConvert.SerializeObject(planStep)
+        Dim imgPrompt = CStr(planStep.Args("imagePrompt"))
+        Dim num = Convert.ToInt32(planStep.Args("numImages"))
+        Dim style = CStr(planStep.Args("style"))
+        Dim folder = CStr(planStep.Args("folderPath"))
+        Return Await CustomFunctions.GenerateImages(imgPrompt, num, style, folder)
+    End Function
 
-        ' Prepare messages
-        Dim messages = New List(Of Dictionary(Of String, String)) From {
-        New Dictionary(Of String, String) From {
-            {"role", "system"}, {"content", sysPrompt}
-        },
-        New Dictionary(Of String, String) From {
-            {"role", "assistant"}, {"content", historyText.ToString().Trim()}
-        },
-        New Dictionary(Of String, String) From {
-            {"role", "user"}, {"content", stepJson}
+    Private Function CheckPolicyBlocks(script As String) As String
+        Dim lowered = script.ToLowerInvariant()
+        Dim denyPatterns As String() = {
+            "remove-item", "remove-childitem", "rmdir", "del ", "format-volume", "clear-content",
+            "stop-service", "stop-process", "set-executionpolicy", "disable-scheduledtask", "unregister-scheduledtask",
+            "erase", "rm ", "shutdown", "restart-computer", "set-itemproperty", "new-itemproperty"
         }
-    }
+        Dim allowPatterns As String() = {
+            "get-", "select-", "measure-", "test-"
+        }
 
-        Const maxAttempts As Integer = 3
-        For attempt As Integer = 1 To maxAttempts
-            ' Call the core GPT model
-            Dim resp As String = Await AIcall.CallGPTCore(
-            Globals.UserApiKey,
-            Globals.AiModelSelection,
-            messages,
-            Globals.temperature,
-            ct
-        )
-
-            ' Extract the first {...} JSON block
-            Dim m = Regex.Match(resp, "(\{[\s\S]*\})")
-            If m.Success Then
-                Dim jsonOnly = m.Groups(1).Value
-                Try
-                    Return JsonConvert.DeserializeObject(Of PlanStep)(jsonOnly)
-                Catch ex As Exception
-                    Debug.WriteLine($"[RefinePlanStep] Parse error (attempt {attempt}): {ex.Message}")
-                End Try
-            Else
-                Debug.WriteLine($"[RefinePlanStep] No JSON block found (attempt {attempt})")
+        For Each deny In denyPatterns
+            If lowered.Contains(deny) Then
+                ' If explicitly allowed by safe read patterns, skip block
+                If allowPatterns.Any(Function(a) lowered.Contains(a)) Then
+                    Continue For
+                End If
+                Return $"[POLICY] Blocked destructive command: {deny}. If this is required, ask the user for approval or use a safer alternative."
             End If
-
-            ' Exponential back-off
-            Await Task.Delay(500 * attempt, ct)
         Next
-
-        ' All attempts failed: return original
-        Return planStep
+        Return Nothing
     End Function
 
+    Private Async Function ExecutePowerShellScript(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
+
+        ' ✅ FIX: Strip code fences from script argument
+        Dim script = HelperFunctions.StripCodeFences(CStr(planStep.Args("script")))
+
+        Dim policyBlock = CheckPolicyBlocks(script)
+        If Not String.IsNullOrWhiteSpace(policyBlock) Then
+            Return policyBlock
+        End If
+
+        ' AST/syntax validation before any execution
+        Dim parseErrors As List(Of String) = Nothing
+        If Not PowerShellParser.TryParsePowerShellScript(script, parseErrors) Then
+            Dim msg = "[PARSER] PowerShell syntax errors: " & String.Join(" | ", parseErrors.Take(3))
+            Return msg
+        End If
+
+        ' Validate safety
+        Dim validation = PowerShellScriptSafety.Inspect(script, SecurityFlags.BlockSystemC)
+        If Not validation.IsValid Then
+            Return $"[SECURITY] Script blocked: {validation.BlockReason}"
+        End If
+
+        ' Execute PowerShell script
+        Dim psResult = Await ExecutePowerShellScriptAsync(script, ct)
+
+        ' Build result message
+        Dim resultMessage As String
+        If psResult.Item1 Then
+            If String.IsNullOrWhiteSpace(psResult.Item2) Then
+                resultMessage = "❌ PowerShell returned empty output"
+            Else
+                resultMessage = psResult.Item2
+            End If
+        Else
+            resultMessage = $"❌ PowerShell execution failed: {psResult.Item2}"
+        End If
+
+        Debug.WriteLine($"[ExecutePowerShellScript] Result: {resultMessage}")
+        Return resultMessage
+    End Function
+
+    Private Function ExecuteFreeResponse(planStep As PlanStep) As String
+        Dim responseText = CStr(planStep.Args("text"))
+        Shelly.Instance.AppendResultToBox(responseText & Environment.NewLine)
+        Return responseText
+    End Function
+
+    Private Async Function ExecuteCustomFunction(
+        planStep As PlanStep,
+        ct As CancellationToken
+    ) As Task(Of String)
+
+        ' Try to execute as a custom function via CustomFunctionsEngine
+        Try
+            ' ✅ FIX: Use direct execution with dictionary args (V2 Pipeline)
+            Debug.WriteLine($"[ExecuteCustomFunction] Calling Direct: {planStep.Tool}")
+
+            Return Await CustomFunctionsEngine.ExecuteAppFunctionDirectAsync(planStep.Tool, planStep.Args, ct)
+        Catch ex As Exception
+            Return $"[ERROR] Function execution failed: {planStep.Tool} - {ex.Message}"
+        End Try
+    End Function
 
 End Module

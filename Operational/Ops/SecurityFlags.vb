@@ -18,6 +18,7 @@ Public Module SecurityFlags
     Private _blockNetworkCalls As Boolean = True
     Private _blockEnvVariableAccess As Boolean = False
     Private _blockBackgroundJobs As Boolean = True
+    Private _blockStartProcess As Boolean = False  ' NEW: User-configurable Start-Process blocking
 
 
     ' User-configurable flags (with backing properties)
@@ -63,6 +64,16 @@ Public Module SecurityFlags
         End Get
         Set(value As Boolean)
             _blockBackgroundJobs = value
+        End Set
+    End Property
+
+    ' NEW: Expose BlockStartProcess
+    Public Property BlockStartProcess As Boolean
+        Get
+            Return _blockStartProcess
+        End Get
+        Set(value As Boolean)
+            _blockStartProcess = value
         End Set
     End Property
 

@@ -196,6 +196,7 @@ and correct any grammatical issues. Do not add commentary or modify the meaning.
             If addToHistory Then
                 Dim message = CreateHistoryMessage("assistant", content)
                 conversationHistory.Add(message)
+                InteractionLog.AppendInteraction("assistant", content)
             End If
         Else
             Debug.WriteLine("[DEBUG] AppendResultToBox received empty or null content.")

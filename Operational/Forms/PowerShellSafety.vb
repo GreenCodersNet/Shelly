@@ -24,6 +24,9 @@ Public Class PowerShellSafety
         CheckBoxBlockEnv.Checked = My.Settings.PowerShell_BlockEnvVariables
         CheckBoxBlockJobs.Checked = My.Settings.PowerShell_BlockBackgroundJobs
 
+        ' Temporary: Load from SecurityFlags until Setting is added
+        CheckStartProcess.Checked = SecurityFlags.BlockStartProcess
+
         ' Add a styled warning label
         LabelWarning.Text = "⚠ Warning: Changing these settings may allow the AI to access files or modify system behavior." &
                             vbCrLf & "For maximum protection, use the default settings."
@@ -57,6 +60,11 @@ Public Class PowerShellSafety
             "Disables commands that execute code in the background (e.g., Start-Job, Invoke-Command). " + vbCrLf +
             "Prevents hidden script execution.")
 
+        ' NEW: Add tooltip for Start-Process checkbox
+        ToolTipSecurity.SetToolTip(CheckStartProcess,
+            "Blocks Start-Process command in PowerShell scripts." + vbCrLf +
+            "Enable this to prevent AI from launching applications or opening files/URLs." + vbCrLf +
+            "Disable to allow starting applications (e.g., opening browsers, launching programs).")
     End Sub
 
     Private Sub ButtonSave_Click(sender As Object, e As EventArgs) Handles ButtonSave.Click
@@ -66,6 +74,7 @@ Public Class PowerShellSafety
         SecurityFlags.BlockNetworkCalls = CheckBoxBlockNetwork.Checked
         SecurityFlags.BlockEnvVariableAccess = CheckBoxBlockEnv.Checked
         SecurityFlags.BlockBackgroundJobs = CheckBoxBlockJobs.Checked
+        SecurityFlags.BlockStartProcess = CheckStartProcess.Checked  ' NEW: Save Start-Process setting
 
         ' Save to My.Settings
         Globals.SavePowerShellSecuritySettings()
@@ -109,6 +118,7 @@ Public Class PowerShellSafety
         CheckBoxBlockNetwork.Checked = True
         CheckBoxBlockEnv.Checked = False
         CheckBoxBlockJobs.Checked = True
+        CheckStartProcess.Checked = False  ' NEW: Default to allowing Start-Process
 
         ' Apply defaults to SecurityFlags and Settings
         SecurityFlags.ConstrainedLanguageMode = False
@@ -116,6 +126,7 @@ Public Class PowerShellSafety
         SecurityFlags.BlockNetworkCalls = True
         SecurityFlags.BlockEnvVariableAccess = False
         SecurityFlags.BlockBackgroundJobs = True
+        SecurityFlags.BlockStartProcess = False  ' NEW: Default to allowing Start-Process
 
         ' Save defaults to My.Settings
         Globals.SavePowerShellSecuritySettings()
@@ -129,5 +140,7 @@ Public Class PowerShellSafety
 
     End Sub
 
+    Private Sub CheckBoxBlockJobs_CheckedChanged(sender As Object, e As EventArgs) Handles CheckBoxBlockJobs.CheckedChanged
 
+    End Sub
 End Class

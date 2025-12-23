@@ -1,10 +1,10 @@
-﻿' ###  Shelly.vb - v1.0.1 ### 
+' ###  Shelly.vb - v1.0.1 ### 
 
 ' ##########################################################
 '  Shelly - v1.0.1
 '  License: Creative Commons Attribution-NonCommercial (CC BY-NC)
 '  https://creativecommons.org/licenses/by-nc/4.0/
-'  © 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
+'  � 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
 ' ##########################################################
 
 Imports System.Runtime.InteropServices
@@ -19,46 +19,46 @@ Partial Public Class Shelly
 
 
     <DllImport("user32.dll")>
-    Private Shared Function ReleaseCapture() As Boolean
+    Public Shared Function ReleaseCapture() As Boolean
     End Function
 
-    Private Const WM_NCLBUTTONDOWN As Integer = &HA1
-    Private Const HTCAPTION As Integer = 2
+    Public Const WM_NCLBUTTONDOWN As Integer = &HA1
+    Public Const HTCAPTION As Integer = 2
 
-    Private mouseX As Integer
-    Private mouseY As Integer
+    Public mouseX As Integer
+    Public mouseY As Integer
 
-    Private aiTrainingFile As String = "" 'Globals.TrainingText
-    Private totalTokens As Integer = 0
+    Public aiTrainingFile As String = "" 'Globals.TrainingText
+    Public totalTokens As Integer = 0
     Public ReadOnly maxHistoryMessages As Integer = 20 ' Increased from 3
-    Private AImodel As String = AiModelSelection
-    Private cancellationTokenSource As CancellationTokenSource
-    Private currentPowerShellProcess As Process
-    Private processLock As New Object()
+    Public AImodel As String = AiModelSelection
+    Public cancellationTokenSource As CancellationTokenSource
+    Public currentPowerShellProcess As Process
+    Public processLock As New Object()
     Public functionRegistry As New FunctionRegistry()
-    Private Shared _instance As Shelly
+    Public Shared _instance As Shelly
 
     ' Flags and Constants
-    Private isTrainingSent As Boolean = False
-    Private isVerificationDone As Boolean = False
-    Private Const ScriptLineThreshold As Integer = 5
-    Private executedCalls As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
+    Public isTrainingSent As Boolean = False
+    Public isVerificationDone As Boolean = False
+    Public Const ScriptLineThreshold As Integer = 5
+    Public executedCalls As New HashSet(Of String)(StringComparer.OrdinalIgnoreCase)
 
     ' Initial panel height (collapsed state)
-    Private Const collapsedHeight As Integer = 0
-    Private Const expandedHeight As Integer = 65 ' Adjust this as needed
+    Public Const collapsedHeight As Integer = 0
+    Public Const expandedHeight As Integer = 65 ' Adjust this as needed
 
     ' Flag to track whether the panel is expanded or collapsed
-    Private isPanelExpanded As Boolean = False
-    Private initialFormHeight As Integer
+    Public isPanelExpanded As Boolean = False
+    Public initialFormHeight As Integer
 
     ' Separate variable for system prompt
-    Private systemPrompt As Dictionary(Of String, String) = Nothing
+    Public systemPrompt As Dictionary(Of String, String) = Nothing
 
     ' Google:
     Public isGoogleTranslateLoaded As Boolean = False ' Track if page is loaded
 
-    Private skipNextPlainTextSegment As Boolean = False
+    Public skipNextPlainTextSegment As Boolean = False
     Dim wasBlockedBySafety As Boolean = False
 
     Public Shared ReadOnly Property Instance As Shelly
@@ -74,6 +74,13 @@ Partial Public Class Shelly
         _instance = Me
 
         AddHandler Me.Shown, AddressOf Shelly_Shown
+
+        ' Initialize per-run interaction log
+        InteractionLog.InitializeInteractionLog()
+
+        ' Reload persisted execution context for planner awareness
+        GlobalOutcomeTracker.Instance.LoadFromDisk()
+        StepOutputManager.Instance.LoadFromDisk()
     End Sub
 
     ' Enhanced cleanup method with unique name
@@ -106,7 +113,7 @@ Partial Public Class Shelly
 
             ' Clear conversation history to free memory
             conversationHistory?.Clear()
-            
+
             ' Clear global caches
             Globals.FileContents?.Clear()
             Globals.GeneratedImages?.Clear()
@@ -129,7 +136,7 @@ Partial Public Class Shelly
     ' NUMBER OF TOKENS
     Public Shared Function CalculateTokenCount(text As String) As Integer
         If String.IsNullOrEmpty(text) Then Return 0
-        ' Count words instead of just characters (closer to OpenAI’s tokenizer)
+        ' Count words instead of just characters (closer to OpenAI�s tokenizer)
         Dim words As String() = text.Split({" "c, vbCrLf, vbLf}, StringSplitOptions.RemoveEmptyEntries)
         Return words.Length + (text.Length \ 6) ' words + approx sentence structure
     End Function
@@ -139,52 +146,7 @@ Partial Public Class Shelly
         Return Regex.Replace(inputText, pattern, "").Trim()
     End Function
 
-    ' TRUNCATE TEXT - Enhanced for better token efficiency
-    Public Shared Function TruncateTextToMaxTokens(text As String, maxTokens As Integer) As String
-        If String.IsNullOrEmpty(text) Then Return text
-        
-        ' More accurate token estimation
-        Dim words As String() = text.Split({" "c, vbCrLf, vbLf, vbTab}, StringSplitOptions.RemoveEmptyEntries)
-        Dim estimatedTokens As Integer = words.Length + (text.Length \ 6) ' Consider punctuation and structure
-        
-        If estimatedTokens <= maxTokens Then
-            Return text
-        End If
-        
-        ' Calculate words to keep based on token limit
-        Dim wordsToKeep As Integer = CInt(maxTokens * 0.8) ' Conservative estimate
-        If wordsToKeep < words.Length Then
-            Return String.Join(" ", words.Take(wordsToKeep)) & "..."
-        End If
-        
-        Return text
-    End Function
 
-    ' Enhanced conversation history trimming
-    Public Shared Sub OptimizeConversationHistory(ByRef conversationHistory As List(Of Dictionary(Of String, String)))
-        If conversationHistory Is Nothing OrElse conversationHistory.Count <= 5 Then Return
-        
-        ' Keep only the most recent and most relevant messages
-        Dim optimizedHistory As New List(Of Dictionary(Of String, String))
-        
-        ' Always keep system messages
-        For Each msg In conversationHistory
-            If msg.ContainsKey("role") AndAlso msg("role") = "system" Then
-                optimizedHistory.Add(msg)
-            End If
-        Next
-        
-        ' Keep last 10 user/assistant exchanges (20 messages total)
-        Dim userAssistantMsgs = conversationHistory.Where(Function(m) m.ContainsKey("role") AndAlso (m("role") = "user" OrElse m("role") = "assistant")).TakeLast(20).ToList()
-        
-        optimizedHistory.AddRange(userAssistantMsgs)
-        
-        ' Replace original with optimized version
-        conversationHistory.Clear()
-        conversationHistory.AddRange(optimizedHistory)
-        
-        Debug.WriteLine($"[OptimizeHistory] Reduced to {conversationHistory.Count} messages")
-    End Sub
 
     ' ============================
     '     MAIN BUTTON ("RUN")
@@ -210,7 +172,7 @@ Partial Public Class Shelly
             Debug.WriteLine("[DEBUG] RUN button clicked.")
 
 
-            ' ── START SESSION ──
+            ' -- START SESSION --
 
 
             cancellationTokenSource = New CancellationTokenSource
@@ -260,801 +222,6 @@ Partial Public Class Shelly
         Debug.WriteLine($"[DEBUG] A total of {AICallCount} AI calls were made.")
     End Sub
 
-    ' ================================
-    '  HandleUserRequestAsync  – v4.2
-    '  (drop‑in replacement)
-    ' ================================
-    Private Async Function HandleUserRequestAsync(ct As CancellationToken) As Task
-        Dim originalQuestion As String = UserInputBox.Text.Trim()
-        If String.IsNullOrWhiteSpace(originalQuestion) Then
-            LabelStatusUpdate.Text = "Please enter a question or command."
-            Return
-        End If
-
-        Try
-            ' ── Reset typing flag and set active cancellation token ───
-            FileHandler.typingStopped = False
-            FileHandler.ActiveCancellationToken = ct
-            
-            ' ── UI prep ───────────────────────────────────────────
-            SetUIState(False)
-            CancelTaskButton.Enabled = True
-            Await WebView21.CoreWebView2.ExecuteScriptAsync("setColorDefault();")
-            Await WebView21.CoreWebView2.ExecuteScriptAsync("setColorGreen();")
-
-            ' ── Optional “revise prompt” pass ─────────────────────
-            Dim userQuestion As String = originalQuestion
-            If Globals.UsePromptRevision Then
-                userQuestion = Await ReviseUserQuestionAsync(originalQuestion, ct)
-                If String.IsNullOrWhiteSpace(userQuestion) Then
-                    LabelStatusUpdate.Text = "Could not revise the question."
-                    Return
-                End If
-            End If
-
-            ' ── Add user message to history (with trimming) ───────
-            Await convHistory.TrimConversationHistoryByTokens_Dict(conversationHistory, Globals.MaxTotalTokens, userQuestion)
-            conversationHistory.Add(CreateHistoryMessage("user", userQuestion))
-
-            ' ── Planner ↔ Executor iterative loop ────────────────
-            Const MAX_ITER As Integer = 10
-            Dim iteration As Integer = 0
-            Dim taskDone As Boolean = False
-            Dim completedSteps As New List(Of String)()
-            Dim customFunctionUsed As Boolean = False ' Track if a custom function was used
-            lastRunMultiTask = False
-
-            Do While iteration < MAX_ITER AndAlso Not taskDone AndAlso Not ct.IsCancellationRequested
-                iteration += 1
-                LabelStatusUpdate.Text = $"Planning iteration #{iteration}…"
-
-                ' 1️⃣ Compose planner prompt
-                Dim toolsJson As String = ToolPlanner.GetAvailableToolsAsJson()
-                Dim plannerSystemContent As String =
-                $"You are an AI Planner. Available tools:{vbLf}{toolsJson}" & vbLf &
-                "- Use StartOrRunApplicationByName ONLY for executables (do NOT open files/folders)." & vbLf &
-                "- Use the OpenPath tool to open any file or folder path with the default application."
-
-                Dim plannerMessages As New List(Of Dictionary(Of String, String)) From {
-                New Dictionary(Of String, String) From {
-                    {"role", "system"}, {"content", plannerSystemContent}
-                },
-                New Dictionary(Of String, String) From {
-                    {"role", "user"}, {"content",
-                      $"ORIGINAL REQUEST:{vbLf}{originalQuestion}{vbLf}{vbLf}" &
-                      $"TOOLS ALREADY FINISHED (with full args):{vbLf}" &
-                      If(completedSteps.Count = 0, "<none>", String.Join(vbLf, completedSteps)) & vbLf & vbLf &
-                      "• If you can answer entirely in natural language, return a single " &
-                      "step using tool=""FreeResponse"" with args.text set to the answer." & vbLf &
-                      "• If the answer REQUIRES **running or evaluating PowerShell**, " &
-                      "use tool=""ExecutePowerShellScript"" and place the script inside " &
-                      "`args.script` wrapped in a fenced block." & vbLf &
-                      "• Otherwise list ALL remaining tool steps in order." & vbLf &
-                      "Return only the JSON array (no markdown fences, no commentary)."}}
-            }
-
-                ' 2️⃣ Ask the Planner
-                Dim rawPlanReply As String = Await CallGPTBrain(
-                Globals.UserApiKey,
-                JsonConvert.SerializeObject(plannerMessages),
-                Globals.AssistantId,
-                conversationHistory)
-
-                LogDebugInformation("N/A", conversationHistory,
-                                $"[Planner Raw Reply]{Environment.NewLine}{rawPlanReply}",
-                                0, CalculateTokenCount(rawPlanReply))
-
-                ' 3️⃣ Extract JSON payload if fenced
-                Dim match As Match = Regex.Match(rawPlanReply,
-                             "```json\s*(?<payload>[\s\S]*?)\s*```",
-                             RegexOptions.IgnoreCase)
-                Dim jsonTxt As String = If(match.Success,
-                                   match.Groups("payload").Value.Trim(),
-                                   rawPlanReply.Trim())
-
-                ' 4️⃣ Deserialize into PlanStep list
-                Dim plan As List(Of PlanStep) = Nothing
-                Try
-                    plan = JsonConvert.DeserializeObject(Of List(Of PlanStep))(jsonTxt)
-                Catch
-                    plan = Nothing
-                End Try
-
-                lastRunMultiTask = (plan IsNot Nothing AndAlso plan.Count > 1)
-
-                If plan Is Nothing OrElse plan.Count = 0 Then
-                    ' fallback to multi‑task handler
-                    Await HandleMultiTaskResponseAsync(rawPlanReply, ct)
-                    Exit Do
-                End If
-
-                ' 5️⃣ Terminal FreeResponse (null‑safe)
-                If plan.Count = 1 Then
-                    Dim firstTool As String = If(plan(0).Tool, String.Empty)
-                    If firstTool.Equals("FreeResponse", StringComparison.OrdinalIgnoreCase) Then
-                        Dim ans As String = plan(0).Args("text").ToString()
-
-                        ' Skip "1 ->" if a custom function was used
-                        If Not customFunctionUsed Then
-                            Debug.WriteLine("1 ->" & ans)
-                            AppendResultToBox(ans & Environment.NewLine)
-                            LogDebugInformation("N/A", conversationHistory,
-                                     ans, 0, CalculateTokenCount(ans))
-                        End If
-
-                        taskDone = True
-                        Continue Do
-                    End If
-                End If
-
-                ' 6️⃣ Execute batch and mark steps complete
-                LabelStatusUpdate.Text = "Executing planned tasks…"
-                Await ExecutorAgent.ExecutePlanAsync(plan, ct)
-
-                ' Check if a custom function was used
-                customFunctionUsed = plan.Any(Function(p) p.Tool.Equals("ReadFileAndAnswer", StringComparison.OrdinalIgnoreCase) OrElse
-                                           p.Tool.Equals("GenerateImages", StringComparison.OrdinalIgnoreCase) OrElse
-                                           p.Tool.Equals("UpdateFileByChunks", StringComparison.OrdinalIgnoreCase) OrElse
-                                           p.Tool.Equals("ImageAnswer", StringComparison.OrdinalIgnoreCase))
-
-                completedSteps.AddRange(plan.Select(Function(p) $"{p.Tool}|{JsonConvert.SerializeObject(p.Args)}"))
-
-                ' ▶️ Break after PowerShell or large-file generation steps
-                Dim shouldBreak As Boolean = plan.Any(Function(p) p.Tool.Equals("ExecutePowerShellScript", StringComparison.OrdinalIgnoreCase) OrElse
-                                             p.Tool.Equals("GenerateLargeFileWithTextOrCode", StringComparison.OrdinalIgnoreCase) OrElse
-                                             p.Tool.Equals("WebSearchAndRespondBasedOnPageContent", StringComparison.OrdinalIgnoreCase) OrElse
-                                              p.Tool.Equals("CheckMyScreenAndAnswer", StringComparison.OrdinalIgnoreCase) OrElse
-                                             p.Tool.Equals("ReadWebPageAndRespondBasedOnPageContent", StringComparison.OrdinalIgnoreCase) OrElse
-                                             p.Tool.Equals("UpdateFileByChunks", StringComparison.OrdinalIgnoreCase))
-                If shouldBreak Then
-                    taskDone = True
-                End If
-
-            Loop
-
-            ' ── Final wrap‑up ─────────────────────────────────────
-            LabelStatusUpdate.Text = "All tasks completed."
-            AIcommentBox.Text = "All requested tasks have been completed successfully."
-
-            Await WebView21.CoreWebView2.ExecuteScriptAsync("setColorDefault();")
-
-        Catch ex As OperationCanceledException
-            LabelStatusUpdate.Text = "Task canceled."
-        Catch ex As Exception
-            Debug.WriteLine($"Error: {ex.Message}")
-            LabelStatusUpdate.Text = "Oh no, we got an error."
-        Finally
-            CancelTaskButton.Enabled = False
-            SetUIState(True)
-        End Try
-    End Function
-
-
-
-    ' ================================================================
-    ' UPDATED FUNCTION: ExtractPowerShellScripts
-    ' — Returns only unique PowerShell blocks, in order of appearance.
-    ' ================================================================
-    Private Function ExtractPowerShellScripts(aiResponse As String) As List(Of String)
-        Dim scripts As New List(Of String)()
-        If String.IsNullOrWhiteSpace(aiResponse) Then Return scripts
-
-        ' Regex to find ```powershell … ``` blocks
-        Dim pattern As String = "```powershell\s*([\s\S]*?)\s*```"
-        Dim matches As MatchCollection = Regex.Matches(aiResponse, pattern, RegexOptions.IgnoreCase)
-
-        ' Track which blocks we’ve already added
-        Dim seen As New HashSet(Of String)()
-
-        For Each match As Match In matches
-            If match.Success Then
-                Dim scriptBlock As String = match.Groups(1).Value.Trim()
-                If Not String.IsNullOrWhiteSpace(scriptBlock) Then
-                    ' If we haven't seen it yet, add to output and mark as seen
-                    If Not seen.Contains(scriptBlock) Then
-                        scripts.Add(scriptBlock)
-                        seen.Add(scriptBlock)
-                    End If
-                End If
-            End If
-        Next
-
-        Return scripts
-    End Function
-
-
-    Private Function IsPowerShellScriptSafe(script As String) As Boolean
-        Dim loweredScript = script.ToLowerInvariant()
-
-        ' 0) Always forbidden commands
-        Dim forbiddenCommandsAlways = {
-        "reg add", "reg delete", "reg query", "hklm", "hkey_local_machine",
-        "hkey_classes_root", "set-itemproperty", "new-itemproperty"
-    }
-        For Each cmd In forbiddenCommandsAlways
-            If loweredScript.Contains(cmd) Then Return False
-        Next
-
-        ' 1) Always-forbidden system folders (never allowed)
-        Dim forbiddenPaths = {
-        "c:\windows",
-        "c:\program files",
-        "c:\programdata",
-        "c:\system32",
-        "c:\boot",
-        "c:\recovery"
-    }
-        For Each path In forbiddenPaths
-            If loweredScript.Contains(path) Then
-                Return False
-            End If
-        Next
-
-        ' 2) Root-C:\ protection, only if the user has it enabled
-        If SecurityFlags.BlockSystemC Then
-            ' Block any C:\ path not under C:\Shelly\
-            If loweredScript.Contains("c:\") AndAlso
-           Not loweredScript.Contains("c:\shelly\") Then
-                Return False
-            End If
-        End If
-
-        ' 3) Optional user-configured checks
-        If SecurityFlags.BlockNetworkCalls Then
-            Dim netKeys = {"invoke-webrequest", "invoke-restmethod", "start-bitstransfer", "curl", "wget", "net.webclient"}
-            If netKeys.Any(Function(k) loweredScript.Contains(k)) Then Return False
-        End If
-
-        If SecurityFlags.BlockEnvVariableAccess Then
-            If loweredScript.Contains("$env:") Then Return False
-        End If
-
-        If SecurityFlags.BlockBackgroundJobs Then
-            Dim jobKeys = {"start-job", "invoke-command", "register-scheduledtask", "runspace", "new-thread"}
-            If jobKeys.Any(Function(k) loweredScript.Contains(k)) Then Return False
-        End If
-
-        Return True
-    End Function
-
-
-
-    Public Async Function ExecutePowerShellScriptAsync(
-    script As String,
-    ct As CancellationToken
-) As Task(Of Tuple(Of Boolean, String))
-        LabelStatusUpdate.Text = "Executing PowerShell script..."
-        Try
-            Dim modifiedScript As String = "$ErrorActionPreference = 'Stop';" & Environment.NewLine
-
-            If SecurityFlags.ConstrainedLanguageMode Then
-                modifiedScript &= "$ExecutionContext.SessionState.LanguageMode = 'ConstrainedLanguage';" & Environment.NewLine
-            End If
-
-            modifiedScript &= script
-
-            Dim bytes() = Encoding.Unicode.GetBytes(modifiedScript)
-            Dim encoded = Convert.ToBase64String(bytes)
-            Dim psi As New ProcessStartInfo With {
-                .FileName = "powershell.exe",
-                .Arguments = "-NoProfile -ExecutionPolicy Bypass -EncodedCommand " & encoded,
-                .UseShellExecute = False,
-                .RedirectStandardOutput = True,
-                .RedirectStandardError = True,
-                .CreateNoWindow = True
-            }
-            Using proc As New Process()
-                proc.StartInfo = psi
-                
-                ' Store process reference for potential cancellation
-                SyncLock processLock
-                    currentPowerShellProcess = proc
-                End SyncLock
-                
-                proc.Start()
-                Dim outTask = proc.StandardOutput.ReadToEndAsync(ct)
-                Dim errTask = proc.StandardError.ReadToEndAsync(ct)
-                Dim waitTask = Task.Run(Sub() proc.WaitForExit(), ct)
-                Await Task.WhenAll(outTask, errTask, waitTask)
-                Dim exitCode = proc.ExitCode
-                
-                ' Clear process reference
-                SyncLock processLock
-                    currentPowerShellProcess = Nothing
-                End SyncLock
-                
-                Return If(exitCode = 0,
-                Tuple.Create(True, outTask.Result),
-                Tuple.Create(False, errTask.Result))
-            End Using
-
-        Catch ex As OperationCanceledException
-            ' Ensure process cleanup on cancellation
-            SyncLock processLock
-                If currentPowerShellProcess IsNot Nothing AndAlso Not currentPowerShellProcess.HasExited Then
-                    Try
-                        currentPowerShellProcess.Kill()
-                        currentPowerShellProcess.WaitForExit(5000) ' Wait max 5 seconds
-                    Catch killEx As Exception
-                        Debug.WriteLine($"Error killing PowerShell process: {killEx.Message}")
-                    End Try
-                    currentPowerShellProcess = Nothing
-                End If
-            End SyncLock
-            Return Tuple.Create(False, "Execution canceled by user.")
-        Catch ex As Exception
-            ' Ensure process cleanup on any exception
-            SyncLock processLock
-                currentPowerShellProcess = Nothing
-            End SyncLock
-            Return Tuple.Create(False, $"Exception: {ex.Message}")
-        End Try
-    End Function
-
-    Private Function IsRunningAsAdmin() As Boolean
-        Dim identity = System.Security.Principal.WindowsIdentity.GetCurrent()
-        Dim principal = New System.Security.Principal.WindowsPrincipal(identity)
-        Return principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
-    End Function
-    Public Async Function ExecutePowerShellWithFixLoopAsync(
-    originalScript As String,
-    ct As CancellationToken
-) As Task
-        Globals.LoadPowerShellSecuritySettings()
-        Dim scriptToRun = originalScript
-        Dim maxAttempts = 5
-        Dim attempt = 0
-        Dim finalOutput As String = ""
-        Dim wasSuccessful As Boolean = False
-        Dim wasBlockedBySafety As Boolean = False
-
-        ' Log start of the loop
-        LogDebugInformation("N/A", conversationHistory,
-        "[PS Loop Init] Starting PowerShell execution loop." & Environment.NewLine & originalScript,
-        0, 0)
-
-        While attempt < maxAttempts AndAlso Not ct.IsCancellationRequested
-            attempt += 1
-            LabelStatusUpdate.Text = $"Running PowerShell script… Attempt #{attempt}"
-
-            ' 🔒 SECURITY CHECK BEFORE EXECUTION
-            If Not IsPowerShellScriptSafe(scriptToRun) Then
-                wasBlockedBySafety = True
-
-                Dim blockedMsg =
-                "PowerShell script was blocked by safety measures." & Environment.NewLine &
-                "Access to system paths or critical commands is restricted by your current security settings."
-
-                ' --- SHOW block message, not the script itself ---
-                Using msgForm As New MessageForm(blockedMsg, "Script Blocked")
-                    msgForm.ShowDialog()
-                End Using
-
-                AppendResultToBox("❌ PowerShell script was blocked by safety measures.")
-                LogDebugInformation("N/A", conversationHistory,
-                "[SECURITY BLOCKED] Unsafe PowerShell script was blocked:" & Environment.NewLine & scriptToRun,
-                0, 0)
-
-                Exit While
-            End If
-
-            ' Execute the script
-            Dim result = Await ExecutePowerShellScriptAsync(scriptToRun, ct)
-            Dim success = result.Item1
-            Dim raw = result.Item2
-            Dim clean = RemoveCodeBlocks(raw).Trim()
-
-            ' 1) Constrained Language Mode block
-            If SecurityFlags.ConstrainedLanguageMode Then
-                Dim lowerClean = clean.ToLowerInvariant()
-                If lowerClean.Contains("language mode") OrElse lowerClean.Contains("fulllanguage") Then
-                    wasBlockedBySafety = True
-
-                    Dim msg = "❌ PowerShell script was blocked due to Constrained Language Mode."
-
-                    Using frm As New MessageForm(msg, "Script Blocked")
-                        frm.ShowDialog()
-                    End Using
-
-                    AppendResultToBox(msg)
-                    LogDebugInformation("N/A", conversationHistory,
-            "[SECURITY BLOCKED] Script blocked by Constrained Language Mode.",
-            0, 0)
-
-                    Exit While
-                End If
-            End If
-
-            ' 2) Network Access block
-            If SecurityFlags.BlockNetworkCalls Then
-                Dim lowerClean = clean.ToLowerInvariant()
-                Dim netKeys = {"invoke-webrequest", "invoke-restmethod", "start-bitstransfer", "curl", "wget", "net.webclient"}
-                If netKeys.Any(Function(k) lowerClean.Contains(k)) Then
-                    wasBlockedBySafety = True
-
-                    Dim msg = "❌ PowerShell script was blocked due to Network Access restriction."
-
-                    Using frm As New MessageForm(msg, "Script Blocked")
-                        frm.ShowDialog()
-                    End Using
-
-                    AppendResultToBox(msg)
-                    LogDebugInformation("N/A", conversationHistory,
-            "[SECURITY BLOCKED] Script blocked by Network Access restriction.",
-            0, 0)
-
-                    Exit While
-                End If
-            End If
-
-            ' 3) Environment Variable Access block
-            If SecurityFlags.BlockEnvVariableAccess Then
-                Dim lowerClean = clean.ToLowerInvariant()
-                If lowerClean.Contains("$env:") Then
-                    wasBlockedBySafety = True
-
-                    Dim msg = "❌ PowerShell script was blocked due to Environment Variable restriction."
-
-                    Using frm As New MessageForm(msg, "Script Blocked")
-                        frm.ShowDialog()
-                    End Using
-
-                    AppendResultToBox(msg)
-                    LogDebugInformation("N/A", conversationHistory,
-            "[SECURITY BLOCKED] Script blocked by Environment Variable restriction.",
-            0, 0)
-
-                    Exit While
-                End If
-            End If
-
-            ' 4) Background Jobs block
-            If SecurityFlags.BlockBackgroundJobs Then
-                Dim lowerClean = clean.ToLowerInvariant()
-                Dim jobKeys = {"start-job", "invoke-command", "register-scheduledtask", "runspace", "new-thread"}
-                If jobKeys.Any(Function(k) lowerClean.Contains(k)) Then
-                    wasBlockedBySafety = True
-
-                    Dim msg = "❌ PowerShell script was blocked due to Background Jobs restriction."
-
-                    Using frm As New MessageForm(msg, "Script Blocked")
-                        frm.ShowDialog()
-                    End Using
-
-                    AppendResultToBox(msg)
-                    LogDebugInformation("N/A", conversationHistory,
-                    "[SECURITY BLOCKED] Script blocked by Background Jobs restriction.",
-                    0, 0)
-
-                    Exit While
-                End If
-            End If
-
-            If success Then
-                wasSuccessful = True
-                finalOutput = If(clean = "", "✅ Task completed. Enjoy it!", clean)
-
-                LogDebugInformation("N/A", conversationHistory,
-                "[PS Success] " & finalOutput, 0, CalculateTokenCount(finalOutput))
-
-                Exit While
-            Else
-                LogDebugInformation("N/A", conversationHistory,
-                $"[PS Failure #{attempt}] {clean}", 0, CalculateTokenCount(clean))
-
-                If attempt < maxAttempts Then
-                    ' Ask GPT for a fix
-                    Dim fixPrompt =
-                    $"I tried running this PowerShell script but got an error:{Environment.NewLine}{clean}{Environment.NewLine}" &
-                    $"Script:{Environment.NewLine}```powershell{Environment.NewLine}{scriptToRun}{Environment.NewLine}```" &
-                    Environment.NewLine & "Please return only a corrected script in a ```powershell block."
-
-                    Dim fixResp = Await AIcall.CallGPTCore(
-                    Globals.UserApiKey,
-                    AImodel,
-                    New List(Of Dictionary(Of String, String)) From {
-                        New Dictionary(Of String, String) From {
-                            {"role", "system"}, {"content", "You are a PowerShell troubleshooting assistant."}
-                        },
-                        New Dictionary(Of String, String) From {
-                            {"role", "user"}, {"content", fixPrompt}
-                        }
-                    },
-                    Globals.temperature,
-                    ct
-                )
-
-                    LogDebugInformation("N/A", conversationHistory,
-                    "[PS Repair GPT] " & fixResp, 0, CalculateTokenCount(fixResp))
-
-                    Dim fixes = ExtractPowerShellScripts(fixResp)
-                    If fixes.Count > 0 Then
-                        scriptToRun = fixes(0)
-                    Else
-                        Exit While
-                    End If
-                End If
-            End If
-        End While
-
-        ' ── Final status ───────────────────────────────────
-        If wasSuccessful Then
-            Debug.WriteLine("2 ->" & finalOutput)
-            AppendResultToBox(finalOutput)
-            conversationHistory.Add(CreateHistoryMessage("assistant", finalOutput))
-
-        ElseIf Not wasBlockedBySafety Then
-            Dim msg = "❌ All attempts to run/fix PowerShell script failed."
-            Debug.WriteLine("3 ->")
-            AppendResultToBox(msg)
-        End If
-
-        ' Trim conversation history
-        Await convHistory.TrimConversationHistoryByTokens_Dict(
-        Globals.conversationHistory,
-        Globals.MaxTotalTokens,
-        If(wasSuccessful, finalOutput, "PowerShell failure."))
-    End Function
-
-
-
-
-
-    ' ================================================================
-    ' UPDATED FUNCTION: HandleMultiTaskResponseAsync
-    ' ================================================================
-    Public Async Function HandleMultiTaskResponseAsync(
-    aiResponse As String,
-    ct As CancellationToken
-) As Task
-
-        ' Reset the dedupe set for a fresh run
-        executedCalls.Clear()
-
-        ' (Optional) Log the raw AI response for debugging
-        LogDebugInformation("N/A", conversationHistory,
-        "[Multi-Task] Initial AI Response:" & Environment.NewLine & aiResponse,
-        0, 0)
-
-        ' Parse actionable segments: PS blocks, function calls, text requests, plain text
-        Dim segments As List(Of AISegment) = ParseAISegments(aiResponse)
-
-        ' ── drop any trailing summary segment if it follows a PS or FunctionCall ──
-        If segments.Count >= 2 Then
-            Dim lastSeg = segments(segments.Count - 1)
-            Dim prevSeg = segments(segments.Count - 2)
-            If lastSeg.SegmentType = AISegmentType.Text AndAlso
-           (prevSeg.SegmentType = AISegmentType.PowerShell OrElse prevSeg.SegmentType = AISegmentType.FunctionCall) Then
-
-                Debug.WriteLine("[DEBUG] Removed redundant summary segment.")
-                segments.RemoveAt(segments.Count - 1)
-            End If
-        End If
-
-        If segments.Count = 0 Then
-            AppendResultToBox("No segments found to execute.")
-            Return
-        End If
-
-        ' Execute each segment in order
-        For Each seg As AISegment In segments
-            If ct.IsCancellationRequested Then Exit For
-            Await HandleSingleSegmentAsync(seg, ct)
-            Await Task.Delay(50, ct)   ' UI responsiveness
-        Next
-
-        LabelStatusUpdate.Text = "All tasks completed."
-        Debug.WriteLine("[DEBUG] HandleMultiTaskResponseAsync completed all segments.")
-    End Function
-
-    ' ────────────────────────────────────────────
-    ' UPDATED: ParseAISegments (two‑pass parsing)
-    ' ────────────────────────────────────────────
-    Private Function ParseAISegments(aiResponse As String) As List(Of AISegment)
-        Dim segments As New List(Of AISegment)()
-        If String.IsNullOrWhiteSpace(aiResponse) Then Return segments
-
-        ' 1. Find all PowerShell code blocks in order
-        Dim psPattern As String = "```powershell\s*([\s\S]*?)\s*```"
-        Dim psMatches = Regex.Matches(aiResponse, psPattern, RegexOptions.IgnoreCase)
-        Dim lastPos As Integer = 0
-
-        For Each m As Match In psMatches
-            ' 1a. Everything before this PS block → non‑PS parser
-            If m.Index > lastPos Then
-                Dim before = aiResponse.Substring(lastPos, m.Index - lastPos)
-                segments.AddRange(ParseNonPS(before))
-            End If
-
-            ' 1b. The PS block itself
-            Dim psCode = m.Groups(1).Value.Trim()
-            segments.Add(New AISegment(AISegmentType.PowerShell, psCode))
-
-            lastPos = m.Index + m.Length
-        Next
-
-        ' 1c. Any trailing text after last PS block
-        If lastPos < aiResponse.Length Then
-            Dim tail = aiResponse.Substring(lastPos)
-            segments.AddRange(ParseNonPS(tail))
-        End If
-
-        Return segments
-    End Function
-
-    ' ────────────────────────────────────────────
-    ' NEW: Helper to split non‑PS text into FunctionCall/Text
-    ' ────────────────────────────────────────────
-    Private Function ParseNonPS(text As String) As IEnumerable(Of AISegment)
-        Dim result As New List(Of AISegment)()
-        Dim lines = text.Split({vbCrLf, vbLf}, StringSplitOptions.None)
-        Dim buffer As New StringBuilder()
-
-        ' List of your custom functions
-        Dim customFunctions As String() = {
-        "WriteInsideFileOrWindow",
-        "CheckMyScreenAndAnswer",
-        "StartOrRunApplicationByName",
-        "ReadFileAndAnswer",
-        "GenerateLargeFileWithTextOrCode",
-         "UpdateFileByChunks",
-        "GenerateImages",
-        "ChangeOrSetVolume",
-        "SendMediaKey",
-        "WebSearchAndRespondBasedOnPageContent",
-        "TakePrintScreenOrScreenShot",
-        "ImageAnswer",
-        "ReadCopilotConversation",
-        "SearchForTextInsideFiles",
-        "ReadWebPageAndRespondBasedOnPageContent",
-        "GenerateBatchAndPs1File"
-    }
-        Dim funcRegex = New Regex(
-        "\b(" & String.Join("|", customFunctions) & ")\s*\([^)]*\)",
-        RegexOptions.IgnoreCase
-    )
-
-        For Each rawLine In lines
-            Dim line = rawLine.Trim()
-            ' Skip empty lines (they’ll flush buffer later)
-            If line = "" Then
-                Continue For
-            End If
-
-            ' If this line invokes one or more custom functions:
-            Dim matches = funcRegex.Matches(line)
-            If matches.Count > 0 Then
-                ' 1) Flush any accumulated text as a Text segment
-                If buffer.Length > 0 Then
-                    Dim txt = buffer.ToString().Trim()
-                    If txt <> "" Then result.Add(New AISegment(AISegmentType.Text, txt))
-                    buffer.Clear()
-                End If
-
-                ' 2) Emit each function call separately
-                For Each m As Match In matches
-                    result.Add(New AISegment(AISegmentType.FunctionCall, m.Value.Trim()))
-                Next
-            Else
-                ' Otherwise, accumulate into text buffer
-                buffer.AppendLine(rawLine)
-            End If
-        Next
-
-        ' Flush leftover text
-        If buffer.Length > 0 Then
-            Dim tail = buffer.ToString().Trim()
-            If tail <> "" Then result.Add(New AISegment(AISegmentType.Text, tail))
-        End If
-
-        Return result
-    End Function
-
-    ' ===========================================
-    ' Hybrid HandleSingleSegmentAsync Function
-    ' ===========================================
-
-    Private Async Function HandleSingleSegmentAsync(
-    segment As AISegment,
-    ct As CancellationToken
-) As Task(Of String)
-        Try
-
-            ' ────────────────────────────────────────────
-            ' skip the very next Text segment if it's just a summary
-            If skipNextPlainTextSegment AndAlso segment.SegmentType = AISegmentType.Text Then
-                skipNextPlainTextSegment = False
-                Debug.WriteLine("[DEBUG] Skipped summary segment.")
-                Return "Summary segment skipped."
-            End If
-
-            Select Case segment.SegmentType
-                Case AISegmentType.Text
-                    Dim cleanText = RemoveCodeBlocks(segment.Content).Trim()
-                    If cleanText <> "" Then
-                        Debug.WriteLine("5 ->")
-                        AppendResultToBox(cleanText)
-                        conversationHistory.Add(CreateHistoryMessage("assistant", cleanText))
-                    End If
-                    Return "Text segment displayed."
-
-                Case AISegmentType.TextRequest
-                    Dim response = Await CallGPTCore(
-                    Globals.UserApiKey,
-                    AImodel,
-                    New List(Of Dictionary(Of String, String)) From {
-                        New Dictionary(Of String, String) From {
-                            {"role", "system"},
-                            {"content", "You are a helpful assistant answering creative text-only requests."}
-                        },
-                        New Dictionary(Of String, String) From {
-                            {"role", "user"},
-                            {"content", segment.Content}
-                        }
-                    },
-                    Globals.temperature,
-                    ct
-                )
-                    If Not String.IsNullOrWhiteSpace(response) Then
-                        Debug.WriteLine("6 ->")
-                        AppendResultToBox(response)
-                        conversationHistory.Add(CreateHistoryMessage("assistant", response))
-                    End If
-                    Return "TextRequest processed."
-
-                Case AISegmentType.FunctionCall
-                    Dim signature = segment.Content
-                    If executedCalls.Add(signature) Then
-                        Dim result = Await ExecuteAppFunctionAsync(signature, ct)
-                        If Not String.IsNullOrWhiteSpace(result) Then
-                            Debug.WriteLine("7 ->")
-                            AppendResultToBox(result)
-                            skipNextPlainTextSegment = True
-                        End If
-                    End If
-                    Return "FunctionCall processed."
-
-                Case AISegmentType.PowerShell
-                    Dim key = "PS:" & segment.Content.GetHashCode().ToString()
-                    If executedCalls.Add(key) Then
-                        Await ExecutePowerShellWithFixLoopAsync(segment.Content, ct)
-                        skipNextPlainTextSegment = True
-                    End If
-                    Return "PowerShell segment executed."
-
-                Case Else
-                    Debug.WriteLine("[ERROR] Unknown segment type: " & segment.SegmentType.ToString())
-                    Return "Unknown segment type."
-            End Select
-
-        Catch ex As OperationCanceledException
-            AppendResultToBox("[Canceled by user]")
-            Return "Operation canceled."
-        Catch ex As Exception
-            AppendResultToBox($"[Error] {ex.Message}")
-            Return $"Error: {ex.Message}"
-        End Try
-    End Function
-
-
-    ' -------------------------------
-    ' NEW ENUMERATION UPDATE:
-    ' -------------------------------
-    Public Enum AISegmentType
-        Text
-        PowerShell
-        FunctionCall
-        TextRequest  ' New type for text-based requests wrapped in <gen request> tags.
-    End Enum
-
-    Public Class AISegment
-        Public Property SegmentType As AISegmentType
-        Public Property Content As String
-        Public Sub New(type As AISegmentType, content As String)
-            Me.SegmentType = type
-            Me.Content = content
-        End Sub
-    End Class
 
     ' ============================
     '      MISC. EVENT HANDLERS
@@ -1165,6 +332,22 @@ Partial Public Class Shelly
             ' Set WebView color to default
             Await ExecuteScriptSafeAsync("setColorDefault();")
 
+            ' ?? NEW: Reset intelligent retry system
+            RetryStrategy.Reset()
+            GlobalOutcomeTracker.Instance.Clear()
+
+            ' Reset execution ledger
+            ExecutorAgent.ResetExecutionLedger()
+
+            ' Clear original request
+            Globals.OriginalUserRequest = ""
+
+            ' Clear PowerShell execution ledger
+            If Globals.TaskData.ContainsKey("PowerShellExecutions") Then
+                Dim ledger = TryCast(Globals.TaskData("PowerShellExecutions"), List(Of PowerShellExecutionRecord))
+                ledger?.Clear()
+            End If
+
             ' Clear all UI elements FIRST
             PSFunctResultsBox.Clear()
             UserInputBox.Clear()
@@ -1236,17 +419,14 @@ Partial Public Class Shelly
             End If
 
             PSFunctResultsBox.ScrollToCaret()
+
+            ' Log assistant reply
+            InteractionLog.AppendInteraction("assistant", text)
         Catch ex As Exception
             Debug.WriteLine($"Error appending result: {ex.Message}")
         End Try
     End Sub
 
-    Public Function CreateHistoryMessage(role As String, content As String) As Dictionary(Of String, String)
-        Return New Dictionary(Of String, String) From {
-            {"role", role},
-            {"content", content}
-        }
-    End Function
 
     ' Add periodic cleanup method
     Private Sub PerformPeriodicCleanup()
@@ -1292,55 +472,10 @@ Partial Public Class Shelly
     End Sub
 
     ' ENABLE / DISABLE UI
-    Private Sub SetUIState(isEnabled As Boolean)
+    Public Sub SetUIState(isEnabled As Boolean)
         ButtonUseSpeech.Enabled = isEnabled
         UserInputBox.ReadOnly = Not isEnabled
         Cursor = If(isEnabled, Cursors.Default, Cursors.WaitCursor)
-    End Sub
-
-    ' Debug Logging Function
-    Public Shared Sub LogDebugInformation(userQuestion As String,
-                                       conversationHistory As List(Of Dictionary(Of String, String)),
-                                       aiResponse As String,
-                                       tokensSent As Integer,
-                                       tokensReceived As Integer)
-        ' Extract user question if missing.
-        Dim actualUserPrompt As String = userQuestion
-        If String.IsNullOrWhiteSpace(actualUserPrompt) Then
-            For i As Integer = conversationHistory.Count - 1 To 0 Step -1
-                If String.Equals(conversationHistory(i)("role"), "user", StringComparison.OrdinalIgnoreCase) Then
-                    actualUserPrompt = conversationHistory(i)("content")
-                    Exit For
-                End If
-            Next
-        End If
-
-        ' Build debug message with added timestamp.
-        Dim logBuilder As New System.Text.StringBuilder()
-        logBuilder.AppendLine("======================================")
-        logBuilder.AppendLine("          DEBUG INFORMATION           ")
-        logBuilder.AppendLine("======================================")
-        logBuilder.AppendLine($"Timestamp: {DateTime.Now}")
-        logBuilder.AppendLine($"User Prompt: {actualUserPrompt}")
-        logBuilder.AppendLine("")
-        logBuilder.AppendLine("----- Conversation History -----")
-        For Each msg In conversationHistory
-            logBuilder.AppendLine($"{msg("role").ToUpper()}: {msg("content")}")
-        Next
-        logBuilder.AppendLine("--------------------------------")
-        logBuilder.AppendLine("")
-        logBuilder.AppendLine("----- AI Response -----")
-        logBuilder.AppendLine($"AI: {aiResponse}")
-        logBuilder.AppendLine("--------------------------------")
-        logBuilder.AppendLine("")
-        logBuilder.AppendLine("----- Token Counts -----")
-        logBuilder.AppendLine($"Tokens Sent: {tokensSent}")
-        logBuilder.AppendLine($"Tokens Received: {tokensReceived}")
-        logBuilder.AppendLine("--------------------------------")
-        logBuilder.AppendLine("=== END OF DEBUG INFORMATION ===")
-
-        ' Save log message and update UI.
-        Globals.AppendDebugLog(logBuilder.ToString())
     End Sub
 
 
@@ -1375,7 +510,7 @@ Partial Public Class Shelly
     Private Sub OpenInNewWindowToolStripMenuItem_Click(sender As Object, e As EventArgs) _
     Handles OpenInNewWindowToolStripMenuItem.Click
 
-        ' If we don’t have a live instance (or it was disposed), create one
+        ' If we don�t have a live instance (or it was disposed), create one
         RestoreWindow(ShellyAiResponseZoom)
 
         ' Always update its contents
@@ -1423,5 +558,33 @@ Partial Public Class Shelly
 
     End Sub
 
+    ' Resume last task using persisted outcomes and step outputs
+    Public Async Function ResumeLastTaskAsync() As Task
+        Try
+            ' Reload persisted data
+            GlobalOutcomeTracker.Instance.LoadFromDisk()
+            StepOutputManager.Instance.LoadFromDisk()
+
+            ' If no history, nothing to resume
+            If conversationHistory Is Nothing OrElse conversationHistory.Count = 0 Then
+                AppendResultToBox("No previous task to resume." & Environment.NewLine)
+                Return
+            End If
+
+            ' Re-run handle request with last user message if available
+            Dim lastUser = conversationHistory.LastOrDefault(Function(m) m.ContainsKey("role") AndAlso m("role") = "user")
+            If lastUser Is Nothing Then
+                AppendResultToBox("No user request found to resume." & Environment.NewLine)
+                Return
+            End If
+
+            UserInputBox.Text = lastUser("content")
+            cancellationTokenSource = New CancellationTokenSource()
+            CancelTaskButton.Enabled = True
+            Await HandleUserRequestAsync(cancellationTokenSource.Token)
+        Catch ex As Exception
+            AppendResultToBox($"[Resume Error] {ex.Message}" & Environment.NewLine)
+        End Try
+    End Function
 
 End Class

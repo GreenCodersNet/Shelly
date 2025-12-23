@@ -1,112 +1,108 @@
-# ShellyAI ‚Äì Your AI-Powered Windows Assistant (VB.NET Proof of Concept)
+# Shelly ó AI Orchestrator for Windows
 
-**ShellyAI** is a next-generation **AI automation assistant for Windows**, built with **VB.NET** and designed to show what‚Äôs possible when ChatGPT-style intelligence meets real-world automation.
+**Version:** 2.x (Windows, .NET 8+ WinForms)
+**License:** Creative Commons Attribution-NonCommercial (CC BY-NC)
+**Author:** Vlad Stefanescu | GreenCoders.net
 
-> ‚ö†Ô∏è Shelly is a **proof of concept**, not a finished product ‚Äî but it already demonstrates how AI can manage real PC tasks, run scripts, and interact with the OS securely and intelligently.
+## What Shelly Is
+Shelly is a Windows desktop assistant that plans and executes multi-step tasks. It blends:
+- An AI planner (OpenAI chat models) that emits JSON plans of tool calls.
+- A rich catalog of compiled VB custom functions for speed and safety.
+- A guarded PowerShell runner for system automation when no function fits.
+- Iterative context passing (retry/adjust/finish) until the userís goal is met.
 
----
+Shelly is not a chatbot; it is a task solver with guardrails, outcome tracking, and dynamic replanning.
 
-## üí° What Is Shelly?
+## Core Capabilities
+- **Multi-step planning:** Generates, validates, and executes ordered tool steps; iterates up to 10 times with feedback.
+- **Context-aware retries:** Reuses prior step outputs to branch, retry, or add follow-up actions.
+- **Custom functions first:** File read/search, image gen/analysis, screenshot QA, web search/scrape, typing into windows, volume/media control, script generation, batch/PS emitters, large file writers.
+- **Guarded PowerShell:** Constrained/blocked surfaces (network/env/jobs/system paths) plus heuristic + GPT remediation loop.
+- **Free-response:** Falls back to natural-language answers when no tools are needed.
+- **Caching:** File contents cached in RAM to reduce token use.
+- **Logging/telemetry:** Execution outcomes recorded for planner feedback and debugging.
 
-Shelly is an experimental AI agent designed to:
-- Interpret user prompts
-- Segment them into logical steps
-- Run AI-generated **PowerShell scripts**
-- Execute predefined **Custom Functions**
-- Manage **conversation history** intelligently across steps
-- Control **system-level tasks** via AI
-- Respond with formatted content (e.g., generate files, rename folders, summarize documents)
+## High-Level Flow
+1) **Input** ó User prompt (or speech) captured by `Shelly.vb` UI.
+2) **Request init** ó `HandleUserRequestAsync` sets request ID, resets retry & ledgers, trims history.
+3) **Planning** ó Planner prompt (tools JSON, prior outcomes, history, retry hints) ? `AIcall.CallGPTCore` ? JSON plan.
+4) **Validation** ó `ToolSchemaValidator` checks tool names, types, ranges, required params.
+5) **Execution** ó `ExecutorAgent` routes each step:
+   - Custom function via `CustomFunctionsEngine.ExecuteAppFunctionAsync`.
+   - PowerShell via `ExecutePowerShellScriptAsync` with safety gates.
+   - FreeResponse writes directly to UI.
+6) **Outcome capture** ó `ExecutionOutcome` + `StepOutputManager` store outputs per iteration/step.
+7) **Goal check** ó `GoalValidator` compares requested vs. completed actions; triggers summary for multi-step runs.
+8) **Iterate or finish** ó Up to 10 iterations; final summary shown.
 
----
+## Key Files & Responsibilities
+- **UI / Orchestration**
+  - `Shelly.vb` ó Main form, lifecycle, cancellation, cleanup.
+  - `HandleUserRequest.vb` ó Core loop (plan/execute/retry), conversation trim, summary trigger.
+  - `ConversationHistoryFunctions.vb`, `convHistory.vb` ó History helpers and token trimming.
+- **Planning & Tooling**
+  - `Operational\Ops\ToolPlanner.vb` ó Tool list JSON for planner prompt.
+  - `Operational\Ops\PlanStep.vb` ó Plan DTO.
+  - `Operational\Ops\ToolSchema.vb`, `ToolSchemaValidator.vb` ó Schemas, validation (types/ranges/paths/required/approval flags).
+- **Execution & Outcomes**
+  - `Operational\Ops\ExecutorAgent.vb` ó Executes steps, argument normalization, outcome recording.
+  - `Operational\Ops\ExecutionOutcome.vb`, `OutcomeHistory.vb`, `StepOutputManager.vb`, `RetryStrategy.vb`, `GoalValidator.vb` ó Outcome tracking, digests, retries, goal detection.
+  - `Operational\Ops\Globals.vb` ó Session/model settings, caches, flags.
+- **Custom Functions**
+  - `Operational\FunctionSetup\CustomFunctions.vb` ó Media keys, volume, image gen/analysis, screenshot capture/analysis, batch+ps1 generation, large-file generation.
+  - `Operational\FunctionSetup\CustomFunctions_2.vb` ó File read/QA, typing into windows, web search/scrape, text search, etc.
+  - `Operational\FunctionSetup\CustomFunctionsEngine.vb` ó Reflection-based registration, signature parsing, function dispatch.
+  - `Operational\FunctionSetup\FileHandler.vb`, `generateFiles.vb` ó File IO (pdf/docx/xlsx/pptx/text), chunking, Office COM helpers, clipboard/paste typing, PowerPoint builder.
+- **PowerShell**
+  - `PowerShell.vb` ó Script execution, constrained mode, cancellation, remediation loop, dedupe of runs.
+  - `Operational\Ops\PowerShellSafety.vb`, `PowerShellRemediation.vb`, `PowerShellSafety` form ó Safety inspection, flags UI, heuristic fixes.
+- **AI IO**
+  - `AIcall.vb` ó Chat completion wrapper with token budgeting and model handling (reasoning vs standard models).
+  - `AIBrainiac.vb` ó Assistant-based calls (conversation aware).
+  - `AIimage.vb` ó Image gen/vision (DALL-E, GPT-4.x vision), download helpers.
 
-## ‚ú® Key Features
+## Tool Catalog (selected)
+- **File / Text**: `ReadFileAndAnswer`, `SearchForTextInsideFiles`, `GenerateLargeFileWithTextOrCode`, `UpdateFileByChunks`, `WriteInsideFileOrWindow`.
+- **Web**: `WebSearchAndRespondBasedOnPageContent` (Google + scrape + QA), `ReadWebPageAndRespondBasedOnPageContent`.
+- **Images**: `GenerateImages` (DALL-E), `ImageAnswer`, `CheckMyScreenAndAnswer`, `TakePrintScreenOrScreenShot`.
+- **System**: `StartOrRunApplicationByName`, `ChangeOrSetVolume`, `SendMediaKey`.
+- **Automation**: `GenerateBatchAndPs1File` (paired .bat/.ps1 with safe encodings).
+- **Free text**: `FreeResponse` for direct natural-language answers.
 
-| Feature                         | Description |
-|-------------------------------|-------------|
-| üß† **Multistep AI Planning**  | Breaks down prompts into task segments (e.g., "Download file ‚Üí Rename ‚Üí Explain content") |
-| ‚ö° **PowerShell Execution**    | Executes AI-generated scripts directly on your system, safely |
-| üß© **Custom Function Support** | Lets you define and execute reusable VB.NET functions (e.g., open apps, log results, display alerts) |
-| üîó **Chained Task Results**    | Each step's result is fed into the next one to preserve context |
-| üåê **WebView2 Integration**    | Used for scraping, displaying results, and interacting with websites |
-| üì¶ **Secure API Key Storage** | API keys are encrypted and never hardcoded |
-| üîç **Live Debug Logging**     | Internal logs shown in real time via a custom Console panel |
-| üß™ **Rephrasing + Token Trim**| Auto-optimizes prompts to save tokens when needed |
+## Safety Model
+- **Schema guardrails**: Type/range/path checks, approval flags for high-risk tools (delete/move/copy/PS, services, scheduled tasks).
+- **PowerShell gates**: Blocklists for destructive verbs, system paths, optional blocks for network/env/jobs/C:\. Constrained Language Mode optional. Scripts inspected before run; blocked scripts surfaced to user.
+- **Remediation loop**: Up to 5 attempts; heuristic fixes then GPT repair; stops on repeated failure or safety block.
+- **Execution ledger**: Prevents duplicate function/powershell calls per request.
+- **API key safety**: `SecureStorage` uses DPAPI; `Globals.UserApiKey` always decrypted on read, encrypted on save.
 
----
+## Iteration & Context
+- `StepOutputManager` persists every stepís output per request/iteration; planner prompt always includes these summaries.
+- `OutcomeHistory` supplies recent execution digest; `GoalValidator` maps user intent to required actions (search/summarize/open/generate_image/etc.).
+- `RetryStrategy` caps retries per tool (default 3) and total iterations (10).
 
-## üß™ Why a Proof of Concept?
+## Models
+- User-selectable via settings (`Globals.AiModelSelection`), with reasoning model handling in `AIcall`.
+- Fixed overrides: image generation ? `dall-e-3`; image/screen analysis ? vision (e.g., `gpt-4.1-mini`).
 
-Shelly is a **research-driven prototype** meant to test:
+## How to Use (end user)
+1. Enter a natural-language request (e.g., ìSearch C:\Docs for budget.xlsx and summarize itî).
+2. Click **Run** (or use speech). Shelly plans and executes steps automatically.
+3. Watch the Results panel; cancel anytime. Multi-step summaries appear after completion.
+4. Adjust PowerShell safety and model selection in Settings.
 
-- Whether AI can automate real-world computing tasks on a desktop
-- How to bridge large language models with local system access
-- Whether AI-generated scripts can safely and reliably run without user retyping
+## Extending Shelly (developer quick path)
+1. Add a function in `CustomFunctions.vb` or `CustomFunctions_2.vb` (use `<CustomFunction>` for metadata).
+2. Register schema in `ToolSchema.vb` (types, ranges, required params, risk flags).
+3. Ensure executor dispatch in `ExecutorAgent` (add case or rely on generic dispatch).
+4. Update planner training/tool list if needed (`ToolPlanner`, training resource) so AI can call it.
+5. If PowerShell-based, add safety considerations and schema requirements.
 
-It‚Äôs an evolving platform to explore **AI x OS integration** ‚Äî not yet production-grade, but already exciting.
+## Logging & Telemetry
+- Outcomes: `GlobalOutcomeTracker`/`ExecutionOutcome` with statuses, outputs, errors.
+- Step outputs: `StepOutputManager` for planner context.
+- Debug logs: `Globals.AppendDebugLog`; clear via UI.
+- Interaction log: per-run JSONL at `Logs/interaction-log.jsonl` (relative to the executable). Cleared on startup; records each user prompt and assistant reply.
 
----
-
-## üîß Getting Started
-
-### Prerequisites
-- Windows 10 or 11
-- Visual Studio 2022+
-- .NET 8
-- A valid OpenAI API key (GPT-4o recommended)
-
-### Clone and Run
-
-```bash
-git clone https://github.com/GreenCodersNet/ShellyAI.git
-```
-
-1. Open `ShellyAI.sln` in Visual Studio
-2. Restore NuGet packages (Newtonsoft.Json, NAudio, etc.)
-3. Set project as startup and run (`F5`)
-4. Enter your API key via the app settings (stored securely)
-
----
-
-## üõ°Ô∏è Safety and Control
-
-- The **main branch is protected** ‚Äî only tested changes are merged.
-- Users can create **feature branches** and submit pull requests.
-- All PowerShell execution is tracked and optionally sandboxed.
-
----
-
-## ü§ù Contributing
-
-Interested in building smarter assistants?
-
-1. Fork this repo
-2. Add new tools, scripts, or function integrations
-3. Submit a PR targeting `dev` branch
-4. We‚Äôll test and review before any merge to `main`
-
----
-
-## üìö Learn More
-
-- [GreenCoders.net/Story](https://greencoders.net/story/) ‚Äî our philosophy
-- [Shelly Prototype Walkthrough (Coming Soon)] ‚Äî use cases & tech dive
-- [Assistant Integration Examples] ‚Äî real-world scenarios
-
----
-
-## üß† Roadmap Ideas
-
-- AI-generated UI responses
-- Local AI (offline support)
-- Script approval sandbox
-- Plugin system (like VS Code extensions)
-
----
-
-## ‚öñÔ∏è License
-
-Licensed under [Creative Commons Attribution-NonCommercial 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
-
----
-
-## üå± Built by [GreenCoders](https://greencoders.net) with ‚ù§Ô∏è for sustainable, intelligent software.
+## Licensing
+Creative Commons Attribution-NonCommercial (CC BY-NC 4.0). Commercial use is not permitted. Attribution: Vlad Stefanescu | GreenCoders.net.

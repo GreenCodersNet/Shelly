@@ -500,7 +500,7 @@ CreateEmptyExcelFile -FilePath '{filePath}'
             Return New Tuple(Of Boolean, String)(True, "Not an Office extension; no special script needed.")
         End If
 
-        Return Await Shelly.Instance.ExecutePowerShellScriptAsync(psScript, CancellationToken.None)
+        Return Await ExecutePowerShellScriptAsync(psScript, CancellationToken.None)
     End Function
     ' ==================  GenerateLargeFileWithTextOrCode =======================>
 
