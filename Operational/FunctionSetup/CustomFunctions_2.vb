@@ -17,6 +17,18 @@ Imports System.Globalization
 
 Public Module CustomFunctions2
 
+    ''' <summary>
+    ''' Reads one or more files and answers a question about their content.
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS ON:
+    '''   1. LocalAI processes each chunk (extracts relevant info)
+    '''   2. All chunk summaries are collected in memory
+    '''   3. Cloud AI (OpenAI) generates the FINAL comprehensive response
+    '''   -> NO TOKEN LIMITS on final response!
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS OFF:
+    '''   -> Cloud AI handles everything (existing behavior)
+    ''' </summary>
     Public Async Function ReadFileAndAnswer(
         ByVal filePaths As String,
         ByVal query As String,
@@ -51,44 +63,95 @@ Public Module CustomFunctions2
                 combinedText.AppendLine($"--- End File: {name} ---")
             Next
 
-            ' 3) Break into chunks under your token limit
             Dim fullText = combinedText.ToString()
+            
+            ' === LOCALAI MULTI-BATCH APPROACH ===
+            ' LocalAI processes chunks -> Cloud AI generates final response
+            If Globals.IsLocalAISummarizationEnabled() Then
+                Debug.WriteLine("[ReadFileAndAnswer] === LOCALAI MULTI-BATCH MODE ===")
+                Debug.WriteLine($"[ReadFileAndAnswer] Total content length: {fullText.Length} chars")
+                Debug.WriteLine($"[ReadFileAndAnswer] Query: {query}")
+                
+                ' Step 1: Split into chunks
+                Dim maxWordsPerChunk As Integer = 500  ' ~2000 chars per chunk
+                Dim chunks As List(Of String) = FileHandler.SplitTextIntoChunks(fullText, maxWordsPerChunk)
+                
+                Debug.WriteLine($"[ReadFileAndAnswer] Split into {chunks.Count} chunks for LocalAI processing")
+                
+                ' Step 2: Process each chunk with LocalAI (extract relevant info)
+                Dim chunkSummaries As New List(Of String)()
+                
+                For i As Integer = 0 To chunks.Count - 1
+                    ct.ThrowIfCancellationRequested()
+                    
+                    Shelly.Instance.LabelStatusUpdate.Text = $"LocalAI processing chunk {i + 1}/{chunks.Count}..."
+                    Debug.WriteLine($"[ReadFileAndAnswer] LocalAI processing chunk {i + 1}/{chunks.Count}")
+                    
+                    ' LocalAI extracts relevant information from this chunk
+                    Dim chunkResult = Await ProcessChunkWithLocalAI(chunks(i), query, i + 1, chunks.Count, ct)
+                    
+                    If Not String.IsNullOrWhiteSpace(chunkResult) AndAlso 
+                       Not chunkResult.StartsWith("[ERROR]") AndAlso
+                       Not chunkResult.StartsWith("[LocalAI") Then
+                        chunkSummaries.Add(chunkResult)
+                        Debug.WriteLine($"[ReadFileAndAnswer] Chunk {i + 1} summary: {chunkResult.Length} chars")
+                    Else
+                        Debug.WriteLine($"[ReadFileAndAnswer] Chunk {i + 1} returned no relevant content or error")
+                    End If
+                Next
+                
+                ' Step 3: ALWAYS use Cloud AI for final response (NO TOKEN LIMITS!)
+                Debug.WriteLine($"[ReadFileAndAnswer] === CLOUD AI FINAL RESPONSE ===")
+                Debug.WriteLine($"[ReadFileAndAnswer] Combining {chunkSummaries.Count} chunk summaries for Cloud AI")
+                
+                Shelly.Instance.LabelStatusUpdate.Text = "Generating final response..."
+                
+                Dim finalAnswer = Await GenerateFinalResponseWithCloudAI(chunkSummaries, query, ct)
+                
+                Debug.WriteLine($"[ReadFileAndAnswer] Final response length: {finalAnswer.Length} chars")
+                Return finalAnswer
+            End If
+            
+            ' === CLOUD AI ONLY (Original behavior) ===
+            Debug.WriteLine("[ReadFileAndAnswer] Using cloud AI only (LocalAI summarization OFF)")
+            
+            ' Break into chunks under token limit
             Dim maxCharsPerChunk As Integer = Globals.maxInputTokensPerChunk * 4
-            Dim chunks As New List(Of String)
+            Dim cloudChunks As New List(Of String)
             Dim current As New StringBuilder()
             For Each line In fullText.Split({Environment.NewLine}, StringSplitOptions.None)
                 If current.Length + line.Length + 1 > maxCharsPerChunk AndAlso current.Length > 0 Then
-                    chunks.Add(current.ToString())
+                    cloudChunks.Add(current.ToString())
                     current.Clear()
                 End If
                 current.AppendLine(line)
             Next
-            If current.Length > 0 Then chunks.Add(current.ToString())
+            If current.Length > 0 Then cloudChunks.Add(current.ToString())
 
-            ' 4) Build messages: generic system prompt + all chunks + final question
+            ' Build messages: generic system prompt + all chunks + final question
             Dim messages As New List(Of Dictionary(Of String, String)) From {
                 New Dictionary(Of String, String) From {
                     {"role", "system"},
-                    {"content", "You are a helpful assistant. Read the provided text and answer the user's question based on its content."}
+                    {"content", "You are a helpful assistant. Read the provided text and answer the user's question based on its content. Provide a comprehensive answer with no artificial length limits."}
                 }
             }
 
-            ' feed each chunk
-            For idx = 0 To chunks.Count - 1
-                Dim tag As String = If(idx = 0, $"<CHUNK 1/{chunks.Count}>", $"<CONTINUATION {idx + 1}/{chunks.Count}>")
+            ' Feed each chunk
+            For idx = 0 To cloudChunks.Count - 1
+                Dim tag As String = If(idx = 0, $"<CHUNK 1/{cloudChunks.Count}>", $"<CONTINUATION {idx + 1}/{cloudChunks.Count}>")
                 messages.Add(New Dictionary(Of String, String) From {
                     {"role", "user"},
-                    {"content", tag & vbCrLf & chunks(idx)}
+                    {"content", tag & vbCrLf & cloudChunks(idx)}
                 })
             Next
 
-            ' then the actual question
+            ' Then the actual question
             messages.Add(New Dictionary(Of String, String) From {
                 {"role", "user"},
                 {"content", $"Now, based on all of the above, {query}"}
             })
 
-            ' 5) Single API call with cancellation support
+            ' Single API call with cancellation support
             Dim answer = Await AIcall.CallGPTCore(
                 apiKey:=Config.OpenAiApiKey,
                 model:=Globals.AiModelSelection,
@@ -105,6 +168,103 @@ Public Module CustomFunctions2
         End Try
     End Function
 
+    ''' <summary>
+    ''' Processes a single chunk with LocalAI to extract information relevant to the query.
+    ''' This is the "workhorse" function - LocalAI reads and extracts, doesn't generate final answer.
+    ''' </summary>
+    Private Async Function ProcessChunkWithLocalAI(
+        chunkText As String,
+        userQuery As String,
+        chunkNumber As Integer,
+        totalChunks As Integer,
+        ct As CancellationToken
+    ) As Task(Of String)
+        
+        Debug.WriteLine($"[ProcessChunkWithLocalAI] Processing chunk {chunkNumber}/{totalChunks}")
+        
+        ' Build prompt for LocalAI - focus on EXTRACTION, not final answer
+        Dim prompt As New StringBuilder()
+        prompt.AppendLine($"You are reading part {chunkNumber} of {totalChunks} from a document.")
+        prompt.AppendLine($"User's question: {userQuery}")
+        prompt.AppendLine()
+        prompt.AppendLine("TASK: Extract ALL information from this text that is relevant to answering the user's question.")
+        prompt.AppendLine("- Include specific details, names, dates, numbers, quotes")
+        prompt.AppendLine("- If this chunk has no relevant information, respond with: NO_RELEVANT_INFO")
+        prompt.AppendLine("- Do NOT provide a final answer - just extract the relevant facts")
+        prompt.AppendLine()
+        prompt.AppendLine("TEXT:")
+        prompt.AppendLine(chunkText)
+        
+        Dim result = Await LocalAITextService.GenerateWithModeAsync(
+            prompt.ToString(),
+            LocalAIMode.Summarization,
+            ct,
+            512  ' Allow decent extraction length per chunk
+        )
+        
+        ' Filter out "no relevant info" responses
+        If result.Contains("NO_RELEVANT_INFO") OrElse 
+           result.Trim().Length < 20 Then
+            Return ""
+        End If
+        
+        Return result.Trim()
+    End Function
+
+    ''' <summary>
+    ''' Generates the FINAL comprehensive response using Cloud AI (OpenAI).
+    ''' This combines all chunk summaries and generates an UNLIMITED length response.
+    ''' </summary>
+    Private Async Function GenerateFinalResponseWithCloudAI(
+        chunkSummaries As List(Of String),
+        userQuery As String,
+        ct As CancellationToken
+    ) As Task(Of String)
+        
+        Debug.WriteLine("[GenerateFinalResponseWithCloudAI] Building final response with Cloud AI")
+        
+        ' Combine all chunk summaries
+        Dim combinedSummaries As New StringBuilder()
+        combinedSummaries.AppendLine("=== EXTRACTED INFORMATION FROM DOCUMENT ===")
+        combinedSummaries.AppendLine()
+        
+        For i As Integer = 0 To chunkSummaries.Count - 1
+            If Not String.IsNullOrWhiteSpace(chunkSummaries(i)) Then
+                combinedSummaries.AppendLine($"[Section {i + 1}]")
+                combinedSummaries.AppendLine(chunkSummaries(i))
+                combinedSummaries.AppendLine()
+            End If
+        Next
+        
+        ' Build messages for Cloud AI - NO TOKEN LIMITS
+        Dim messages As New List(Of Dictionary(Of String, String)) From {
+            New Dictionary(Of String, String) From {
+                {"role", "system"},
+                {"content", "You are a helpful assistant. Based on the extracted information provided, " &
+                           "answer the user's question comprehensively. " &
+                           "There are NO LENGTH LIMITS - provide as detailed an answer as needed. " &
+                           "Include all relevant details, examples, and explanations from the source material."}
+            },
+            New Dictionary(Of String, String) From {
+                {"role", "user"},
+                {"content", combinedSummaries.ToString() & Environment.NewLine & Environment.NewLine &
+                           "USER QUESTION: " & userQuery & Environment.NewLine & Environment.NewLine &
+                           "Please provide a comprehensive answer based on the extracted information above. " &
+                           "Include all relevant details - there is no length limit."}
+            }
+        }
+        
+        ' Call Cloud AI with no artificial limits
+        Dim answer = Await AIcall.CallGPTCore(
+            apiKey:=Config.OpenAiApiKey,
+            model:=Globals.AiModelSelection,
+            messages:=messages,
+            temperature:=0.3,  ' Slightly creative but factual
+            ct:=ct
+        )
+        
+        Return answer.Trim()
+    End Function
 
     ' This function types text directly into the active file or window by pasting its full content.
     ' Now supports cancellation and has loop protection

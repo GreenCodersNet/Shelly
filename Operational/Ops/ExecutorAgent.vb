@@ -1,5 +1,7 @@
-﻿' ###  ExecutorAgent.vb - v2.0.0 ###
+﻿' ###  ExecutorAgent.vb - v2.3.0 ###
 ' Executes plan steps and tracks outcomes
+' REFACTORED: All LocalAI+Piper logic moved to final summary only (HandleUserRequest)
+' Step execution is now clean - no per-step summarization
 
 Imports System.Threading
 Imports System.Text
@@ -184,15 +186,12 @@ Public Module ExecutorAgent
                 outcome.StandardError = String.Join("; ", validationResult.Errors)
                 outcome.Complete(OutcomeStatus.ValidationFailed)
                 GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
-
-                ' ✅ FIX: Record validation failure in StepOutputManager so AI can see it!
                 StepOutputManager.Instance.RecordStepOutput(
                     planStep.StepIndex,
                     planStep.Tool,
                     $"[VALIDATION FAILED] {outcome.StandardError}",
                     False
                 )
-
                 RetryStrategy.RecordRetry(planStep.Tool)
                 Debug.WriteLine($"[ExecutorAgent] Validation failed: {outcome.StandardError}")
                 Return
@@ -221,7 +220,6 @@ Public Module ExecutorAgent
                     resultText = ExecuteFreeResponse(planStep)
 
                 Case Else
-                    ' Try to execute as generic custom function
                     resultText = Await ExecuteCustomFunction(planStep, ct)
             End Select
 
@@ -229,15 +227,16 @@ Public Module ExecutorAgent
             outcome.StandardOutput = resultText
             outcome.PolicyBlocked = resultText.Contains("[POLICY]")
             outcome.Status = If(resultText.Contains("[ERROR]") OrElse resultText.Contains("[POLICY]") OrElse resultText.StartsWith("❌"), OutcomeStatus.Failed, OutcomeStatus.Success)
+            
             If planStep.Tool.Equals("ExecutePowerShellScript", StringComparison.OrdinalIgnoreCase) AndAlso planStep.Args.ContainsKey("script") Then
                 outcome.SetScriptAndHash(CStr(planStep.Args("script")))
-                If resultText.StartsWith("✅") Then
-                    outcome.ExitCode = 0
-                    outcome.StandardOutput = resultText
-                Else
+                If resultText.StartsWith("❌") Then
                     outcome.ExitCode = 1
                     outcome.StandardError = resultText
-                    outcome.RemediationNote = "PS failed or empty output; adjust script"
+                    outcome.RemediationNote = "PowerShell execution failed"
+                Else
+                    outcome.ExitCode = 0
+                    outcome.StandardOutput = resultText
                 End If
             End If
             outcome.Complete(outcome.Status)
@@ -252,12 +251,11 @@ Public Module ExecutorAgent
                 resultText,
                 outcome.Status = OutcomeStatus.Success
             )
-
-            If outcome.Status = OutcomeStatus.Failed Then
-                RetryStrategy.RecordRetry(planStep.Tool)
+            
+            ' Display result once (successes only, non-skip messages)
+            If outcome.Status = OutcomeStatus.Success AndAlso Not String.IsNullOrWhiteSpace(resultText) AndAlso Not resultText.Contains("[SKIPPED]") Then
+                Shelly.Instance.AppendResultToBox(resultText & Environment.NewLine)
             End If
-
-            Debug.WriteLine($"[ExecutorAgent] Step {planStep.StepIndex} completed: {outcome.Status}")
 
         Catch ex As OperationCanceledException
             outcome.Status = OutcomeStatus.Cancelled
@@ -270,15 +268,12 @@ Public Module ExecutorAgent
             outcome.StandardError = ex.Message
             outcome.Complete(OutcomeStatus.Failed)
             GlobalOutcomeTracker.Instance.RecordOutcome(outcome)
-
-            ' ✅ FIX: Record execution failure in StepOutputManager so AI can see it!
             StepOutputManager.Instance.RecordStepOutput(
                 planStep.StepIndex,
                 planStep.Tool,
                 $"[EXECUTION FAILED] {ex.Message}",
                 False
             )
-
             RetryStrategy.RecordRetry(planStep.Tool)
             Debug.WriteLine($"[ExecutorAgent] Step exception: {ex.Message}")
         End Try
@@ -288,41 +283,25 @@ Public Module ExecutorAgent
     ' INDIVIDUAL STEP EXECUTORS
     ' ========================================
 
-    Private Async Function ExecuteReadFileAndAnswer(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
+    Private Async Function ExecuteReadFileAndAnswer(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Dim paths = CStr(planStep.Args("filePaths"))
         Dim query = CStr(planStep.Args("query"))
         Return Await CustomFunctions2.ReadFileAndAnswer(paths, query)
     End Function
 
-    Private Async Function ExecuteImageAnswer(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
+    Private Async Function ExecuteImageAnswer(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Dim imgs = CStr(planStep.Args("imagePaths"))
         Dim query = CStr(planStep.Args("query"))
         Return Await CustomFunctions.ImageAnswer(imgs, query)
     End Function
 
-    Private Async Function ExecuteSearchForTextInsideFiles(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
+    Private Async Function ExecuteSearchForTextInsideFiles(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Dim paths = CStr(planStep.Args("paths"))
         Dim searchWord = CStr(planStep.Args("searchText"))
         Return Await CustomFunctions2.SearchForTextInsideFiles(paths, searchWord)
     End Function
 
-    Private Async Function ExecuteGenerateImages(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
+    Private Async Function ExecuteGenerateImages(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Dim imgPrompt = CStr(planStep.Args("imagePrompt"))
         Dim num = Convert.ToInt32(planStep.Args("numImages"))
         Dim style = CStr(planStep.Args("style"))
@@ -337,83 +316,48 @@ Public Module ExecutorAgent
             "stop-service", "stop-process", "set-executionpolicy", "disable-scheduledtask", "unregister-scheduledtask",
             "erase", "rm ", "shutdown", "restart-computer", "set-itemproperty", "new-itemproperty"
         }
-        Dim allowPatterns As String() = {
-            "get-", "select-", "measure-", "test-"
-        }
+        Dim allowPatterns As String() = {"get-", "select-", "measure-", "test-"}
 
         For Each deny In denyPatterns
             If lowered.Contains(deny) Then
-                ' If explicitly allowed by safe read patterns, skip block
-                If allowPatterns.Any(Function(a) lowered.Contains(a)) Then
-                    Continue For
-                End If
-                Return $"[POLICY] Blocked destructive command: {deny}. If this is required, ask the user for approval or use a safer alternative."
+                If allowPatterns.Any(Function(a) lowered.Contains(a)) Then Continue For
+                Return $"[POLICY] Blocked destructive command: {deny}."
             End If
         Next
         Return Nothing
     End Function
 
-    Private Async Function ExecutePowerShellScript(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
-        ' ✅ FIX: Strip code fences from script argument
+    Private Async Function ExecutePowerShellScript(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Dim script = HelperFunctions.StripCodeFences(CStr(planStep.Args("script")))
 
         Dim policyBlock = CheckPolicyBlocks(script)
-        If Not String.IsNullOrWhiteSpace(policyBlock) Then
-            Return policyBlock
-        End If
+        If Not String.IsNullOrWhiteSpace(policyBlock) Then Return policyBlock
 
-        ' AST/syntax validation before any execution
         Dim parseErrors As List(Of String) = Nothing
         If Not PowerShellParser.TryParsePowerShellScript(script, parseErrors) Then
-            Dim msg = "[PARSER] PowerShell syntax errors: " & String.Join(" | ", parseErrors.Take(3))
-            Return msg
+            Return "[PARSER] PowerShell syntax errors: " & String.Join(" | ", parseErrors.Take(3))
         End If
 
-        ' Validate safety
         Dim validation = PowerShellScriptSafety.Inspect(script, SecurityFlags.BlockSystemC)
         If Not validation.IsValid Then
             Return $"[SECURITY] Script blocked: {validation.BlockReason}"
         End If
 
-        ' Execute PowerShell script
         Dim psResult = Await ExecutePowerShellScriptAsync(script, ct)
 
-        ' Build result message
-        Dim resultMessage As String
         If psResult.Item1 Then
-            If String.IsNullOrWhiteSpace(psResult.Item2) Then
-                resultMessage = "❌ PowerShell returned empty output"
-            Else
-                resultMessage = psResult.Item2
-            End If
+            Return If(String.IsNullOrWhiteSpace(psResult.Item2), "Done.", psResult.Item2)
         Else
-            resultMessage = $"❌ PowerShell execution failed: {psResult.Item2}"
+            Return If(String.IsNullOrWhiteSpace(psResult.Item2), "❌ PowerShell execution failed", $"❌ {psResult.Item2}")
         End If
-
-        Debug.WriteLine($"[ExecutePowerShellScript] Result: {resultMessage}")
-        Return resultMessage
     End Function
 
     Private Function ExecuteFreeResponse(planStep As PlanStep) As String
-        Dim responseText = CStr(planStep.Args("text"))
-        Shelly.Instance.AppendResultToBox(responseText & Environment.NewLine)
-        Return responseText
+        Return CStr(planStep.Args("text"))
     End Function
 
-    Private Async Function ExecuteCustomFunction(
-        planStep As PlanStep,
-        ct As CancellationToken
-    ) As Task(Of String)
-
-        ' Try to execute as a custom function via CustomFunctionsEngine
+    Private Async Function ExecuteCustomFunction(planStep As PlanStep, ct As CancellationToken) As Task(Of String)
         Try
-            ' ✅ FIX: Use direct execution with dictionary args (V2 Pipeline)
-            Debug.WriteLine($"[ExecuteCustomFunction] Calling Direct: {planStep.Tool}")
-
             Return Await CustomFunctionsEngine.ExecuteAppFunctionDirectAsync(planStep.Tool, planStep.Args, ct)
         Catch ex As Exception
             Return $"[ERROR] Function execution failed: {planStep.Tool} - {ex.Message}"

@@ -61,6 +61,10 @@ Public NotInheritable Class StepOutputManager
     Private ReadOnly _outputs As New ConcurrentDictionary(Of String, StepOutput)()
     Private ReadOnly _persistencePath As String = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Logs", "stepoutputs.json")
     
+    ' NEW: Lightweight summaries for final AI rephrasing (token-efficient)
+    Private ReadOnly _stepSummaries As New List(Of StepExecutionSummary)
+    Private ReadOnly _summariesLock As New Object()
+    
     ' Current session tracking
     Private _currentRequestId As String = ""
     Private _currentIteration As Integer = 0
@@ -75,6 +79,12 @@ Public NotInheritable Class StepOutputManager
     Public Sub StartNewRequest(requestId As String)
         _currentRequestId = requestId
         _currentIteration = 0
+        
+        ' Clear summaries for new request
+        SyncLock _summariesLock
+            _stepSummaries.Clear()
+        End SyncLock
+        
         Debug.WriteLine($"[StepOutputManager] Started new request: {requestId}")
     End Sub
     
@@ -89,7 +99,7 @@ Public NotInheritable Class StepOutputManager
     ''' <summary>
     ''' Records the output from a step execution (overload for simpler signature)
     ''' </summary>
-    Public Sub RecordStepOutput(stepIndex As Integer, toolName As String, outputText As String, success As Boolean)
+    Public Sub RecordStepOutput(stepIndex As Integer, toolName As String, outputText As String, success As Boolean, Optional shortSummary As String = Nothing)
         Try
             Dim stepOutput As New StepOutput With {
                 .RequestId = _currentRequestId,
@@ -101,33 +111,57 @@ Public NotInheritable Class StepOutputManager
                 .Status = If(success, OutcomeStatus.Success, OutcomeStatus.Failed),
                 .Timestamp = DateTimeOffset.UtcNow
             }
-            
-            RecordOutput(_currentIteration, stepIndex, stepOutput)
-            
+
+            RecordOutput(_currentIteration, stepIndex, stepOutput, shortSummary)
+
         Catch ex As Exception
             Debug.WriteLine($"[StepOutputManager] Error in RecordStepOutput: {ex.Message}")
         End Try
     End Sub
-    
+
     ''' <summary>
     ''' Records the output from a step execution
     ''' </summary>
-    Public Sub RecordOutput(iteration As Integer, stepIndex As Integer, output As StepOutput)
+    Public Sub RecordOutput(iteration As Integer, stepIndex As Integer, output As StepOutput, Optional shortSummary As String = Nothing)
         Try
             output.Iteration = iteration
             output.StepIndex = stepIndex
             output.RequestId = _currentRequestId
-            
+
             Dim key = BuildKey(_currentRequestId, iteration, stepIndex)
             _outputs(key) = output
-            
+
             Debug.WriteLine($"[StepOutputManager] Recorded output for {key}: {output.ToolName} -> {output.Status}")
+
+            Dim success As Boolean = (output.Status = OutcomeStatus.Success)
+            Dim summary = ContentClassifier.ClassifyStepOutput(output.ToolName, output.Output, success, output.Arguments)
+            summary.StepIndex = stepIndex
+            If Not String.IsNullOrWhiteSpace(shortSummary) Then
+                summary.ShortSummary = shortSummary
+            End If
+
+            SyncLock _summariesLock
+                _stepSummaries.Add(summary)
+            End SyncLock
+
+            Debug.WriteLine($"[StepOutputManager] Classified as {summary.ContentType}: {summary.ShortDescription}")
+
             SaveToDisk()
         Catch ex As Exception
             Debug.WriteLine($"[StepOutputManager] Error recording output: {ex.Message}")
         End Try
     End Sub
-    
+
+    Public Sub UpdateShortSummary(stepIndex As Integer, shortSummary As String)
+        If String.IsNullOrWhiteSpace(shortSummary) Then Return
+        SyncLock _summariesLock
+            Dim target = _stepSummaries.LastOrDefault(Function(s) s.StepIndex = stepIndex)
+            If target IsNot Nothing Then
+                target.ShortSummary = shortSummary
+            End If
+        End SyncLock
+    End Sub
+
     ''' <summary>
     ''' Gets all outputs for a specific iteration
     ''' </summary>
@@ -299,6 +333,71 @@ Public NotInheritable Class StepOutputManager
         End Try
     End Function
     
+    ' ========== NEW: SUMMARY METHODS FOR FINAL AI REPHRASING ==========
+    
+    ''' <summary>
+    ''' Gets lightweight summaries for final AI rephrasing call (token-efficient)
+    ''' Only includes successful steps to keep response positive and focused
+    ''' </summary>
+    Public Function GetStepSummariesForRephrasing() As List(Of StepExecutionSummary)
+        Try
+            SyncLock _summariesLock
+                Return _stepSummaries _
+                    .Where(Function(s) s.Status = OutcomeStatus.Success) _
+                    .OrderBy(Function(s) s.StepIndex) _
+                    .ToList()
+            End SyncLock
+        Catch ex As Exception
+            Debug.WriteLine($"[StepOutputManager] Error getting summaries: {ex.Message}")
+            Return New List(Of StepExecutionSummary)()
+        End Try
+    End Function
+    
+    ''' <summary>
+    ''' Gets all summaries including failures (for error reporting)
+    ''' </summary>
+    Public Function GetAllSummaries() As List(Of StepExecutionSummary)
+        Try
+            SyncLock _summariesLock
+                Return _stepSummaries.OrderBy(Function(s) s.StepIndex).ToList()
+            End SyncLock
+        Catch ex As Exception
+            Debug.WriteLine($"[StepOutputManager] Error getting all summaries: {ex.Message}")
+            Return New List(Of StepExecutionSummary)()
+        End Try
+    End Function
+    
+    ''' <summary>
+    ''' Builds a compact context string for final AI rephrasing
+    ''' Uses summaries instead of full outputs to minimize tokens
+    ''' </summary>
+    Public Function BuildCompactContextForRephrasing(Optional includeFullOutputs As Boolean = False) As String
+        Try
+            Dim summaries = GetStepSummariesForRephrasing()
+            If summaries.Count = 0 Then
+                Return "<No completed steps>"
+            End If
+
+            Dim sb As New StringBuilder()
+            sb.AppendLine("Steps completed for the user:")
+            sb.AppendLine()
+
+            For Each summary In summaries
+                sb.Append(summary.GetCompactRepresentation())
+                If includeFullOutputs AndAlso Not String.IsNullOrWhiteSpace(summary.FullOutput) Then
+                    sb.AppendLine("  Full output:")
+                    sb.AppendLine(summary.FullOutput)
+                End If
+            Next
+
+            Return sb.ToString()
+
+        Catch ex As Exception
+            Debug.WriteLine($"[StepOutputManager] Error building compact context: {ex.Message}")
+            Return "<Error building context>"
+        End Try
+    End Function
+    
     ''' <summary>
     ''' Clears all stored outputs for current request
     ''' </summary>
@@ -310,6 +409,12 @@ Public NotInheritable Class StepOutputManager
                 Dim removed As StepOutput = Nothing
                 _outputs.TryRemove(key, removed)
             Next
+            
+            ' Clear summaries too
+            SyncLock _summariesLock
+                _stepSummaries.Clear()
+            End SyncLock
+            
             SaveToDisk()
             
             Debug.WriteLine($"[StepOutputManager] Cleared {keysToRemove.Count} outputs for request {_currentRequestId}")
@@ -325,6 +430,12 @@ Public NotInheritable Class StepOutputManager
     Public Sub ClearAll()
         Try
             _outputs.Clear()
+            
+            ' Clear summaries too
+            SyncLock _summariesLock
+                _stepSummaries.Clear()
+            End SyncLock
+            
             _currentRequestId = ""
             _currentIteration = 0
             SaveToDisk()

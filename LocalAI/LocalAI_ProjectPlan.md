@@ -1,0 +1,153 @@
+# Local AI Integration - Project Plan
+
+## Overview
+Integrate a local LLM (llama-3.2-3b-instruct) into Shelly for token-efficient final response rephrasing.
+
+## Goal
+Use local AI **only** for summarizing/rephrasing multi-task outputs into natural AI assistant responses.
+- No conversation history needed
+- No JSON output required
+- No complex reasoning
+- Single-shot text-in ? text-out
+
+## Phase 1: Isolated Testing (Current)
+
+### Objective
+Validate that LLamaSharp can load and run the model from VB.NET before any integration.
+
+### Files to Create
+| File | Purpose |
+|------|---------|
+| `LocalAI/LocalAITestForm.vb` | Simple test form with prompt/response UI |
+| `LocalAI/LocalAITestForm.Designer.vb` | Designer file for the test form |
+| `LocalAI/LocalAIEngine.vb` | Core wrapper for model loading and inference |
+| `LocalAI/LocalAI_README.md` | Setup instructions for users |
+
+### NuGet Packages Required
+```
+LLamaSharp
+LLamaSharp.Backend.Cpu (for CPU-only inference)
+```
+Optional for GPU acceleration:
+```
+LLamaSharp.Backend.Cuda12 (requires NVIDIA GPU + CUDA)
+```
+
+### Test Form UI
+```
+???????????????????????????????????????????????????
+?  Local AI Test                            [X]   ?
+???????????????????????????????????????????????????
+?  Model Path: [________________________] [Browse]?
+?  [Load Model]                    Status: Ready  ?
+???????????????????????????????????????????????????
+?  Your Prompt:                                   ?
+?  ???????????????????????????????????????????   ?
+?  ?                                         ?   ?
+?  ?  (RichTextBox - user input)             ?   ?
+?  ?                                         ?   ?
+?  ???????????????????????????????????????????   ?
+?                                    [Submit]     ?
+???????????????????????????????????????????????????
+?  AI Response:                                   ?
+?  ???????????????????????????????????????????   ?
+?  ?                                         ?   ?
+?  ?  (RichTextBox - AI output)              ?   ?
+?  ?                                         ?   ?
+?  ???????????????????????????????????????????   ?
+???????????????????????????????????????????????????
+```
+
+### Success Criteria
+- [ ] Model loads without errors
+- [ ] Prompt submitted successfully
+- [ ] Response generated within 30 seconds
+- [ ] Response quality matches LM Studio output
+- [ ] No crashes or memory leaks
+
+---
+
+## Phase 2: Settings Integration (Future)
+
+### Changes to Existing Files
+| File | Change |
+|------|--------|
+| `Settings.vb` | Add checkbox: "Use Local AI for final responses" |
+| `Settings.Designer.vb` | Add UI controls |
+| `My.Settings` | Add `UseLocalAIForFinalResponse` boolean |
+| `Globals.vb` | Add `UseLocalAI` flag |
+
+---
+
+## Phase 3: FinalResponseGenerator Integration (Future)
+
+### Changes to `FinalResponseGenerator.vb`
+```vb
+Public Async Function GenerateNaturalResponse(...) As Task(Of String)
+    ' Check user preference
+    If Globals.UseLocalAI AndAlso LocalAIEngine.IsModelLoaded Then
+        ' Use local LLM
+        Return Await LocalAIEngine.GenerateResponseAsync(compactContext)
+    Else
+        ' Use GPT (existing code)
+        Return Await AIcall.CallGPTCore(...)
+    End If
+End Function
+```
+
+---
+
+## Model Requirements
+
+### Recommended Model
+- **Name:** llama-3.2-3b-instruct
+- **Format:** GGUF (quantized)
+- **Quantization:** Q4_K_M or Q5_K_M (balance of size/quality)
+- **Size:** ~2-3 GB
+
+### Model Location
+User must download and place model in:
+```
+[App Directory]/Models/llama-3.2-3b-instruct.gguf
+```
+Or select custom path via Settings.
+
+---
+
+## Hardware Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| RAM | 4 GB free | 8 GB free |
+| CPU | Any x64 | 4+ cores |
+| GPU | Not required | NVIDIA (optional) |
+| Storage | 3 GB for model | SSD preferred |
+
+---
+
+## Risk Mitigation
+
+| Risk | Mitigation |
+|------|------------|
+| Model not found | Graceful fallback to GPT |
+| Slow inference | Show progress indicator, timeout after 60s |
+| Out of memory | Catch exception, fallback to GPT |
+| Poor quality output | User can disable via Settings |
+
+---
+
+## Timeline
+
+- **Phase 1:** Isolated testing (current task)
+- **Phase 2:** Settings integration (after Phase 1 passes)
+- **Phase 3:** FinalResponseGenerator integration (after Phase 2)
+- **Phase 4:** User testing and feedback
+
+---
+
+## Notes
+
+- Local AI is **optional** - GPT remains the default
+- No changes to core AI planning logic
+- Token savings only apply to final summary step
+- Model file is NOT included in repository (user downloads separately)

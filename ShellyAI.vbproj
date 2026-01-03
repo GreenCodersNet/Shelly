@@ -32,6 +32,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Remove="app.manifest" />
     <None Remove="Resources\anim-gif-cropped %282%29.gif" />
     <None Remove="Resources\circle-SHELLY-extra-small.png" />
@@ -81,10 +87,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="tests\integration\ShellyHarness\ShellyHarness.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Dapplo.Windows.Input" Version="1.0.28" />
     <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
     <PackageReference Include="DocumentFormat.OpenXml.Framework" Version="3.3.0" />
@@ -92,6 +94,11 @@
     <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
     <PackageReference Include="InputSimulatorCore" Version="1.0.5" />
     <PackageReference Include="InputSimulatorStandard" Version="1.0.0" />
+    <PackageReference Include="LLamaSharp" Version="0.21.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.21.0" />
+    <!-- CUDA backend requires CUDA Toolkit 12.x to be installed on the system -->
+    <!-- Remove this if you don't have CUDA installed -->
+    <PackageReference Include="LLamaSharp.Backend.Cuda12" Version="0.21.0" />
     <PackageReference Include="Microsoft.Office.Interop.Word" Version="15.0.4797.1004" />
     <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.5.1" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3240.44" />
@@ -103,6 +110,7 @@
     <PackageReference Include="SharperPortAudio" Version="1.0.3" />
     <PackageReference Include="System.Drawing.Common" Version="8.0.1" />
     <PackageReference Include="WindowsInput" Version="6.4.1" />
+    <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -144,6 +152,14 @@
     <None Update="Resources\mic3.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <!-- Copy Piper TTS files to output directory -->
+  <ItemGroup>
+    <Content Include="LocalAI\Piper\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>LocalAI\Piper\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
   </ItemGroup>
 
 </Project>

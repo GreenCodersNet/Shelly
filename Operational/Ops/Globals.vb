@@ -1,15 +1,88 @@
-﻿' ###  Globals.vb - v1.0.1 ### 
-
-' ##########################################################
-'  Shelly - v1.0.1
-'  License: Creative Commons Attribution-NonCommercial (CC BY-NC)
-'  https://creativecommons.org/licenses/by-nc/4.0/
-'  © 2025 Vlad Stefanescu | GreenCoders.net. Attribution required.
-' ##########################################################
-
-Imports NAudio.Wave ' Ensure NAudio is referenced in your project
+﻿Imports NAudio.Wave ' Ensure NAudio is referenced in your project
+Imports System.Collections.Specialized
 
 Public Module Globals
+
+    ' ========================== LOCAL AI PERSISTENCE ==============================
+    Public LocalAIModelPaths As New List(Of String)
+    Public LocalAIVoices As New List(Of String)
+    Public LocalAISelectedModel As String = String.Empty
+    Public LocalAISelectedVoice As String = String.Empty
+    Public LocalAIUseGpu As Boolean = False  ' False = CPU, True = GPU
+    Public LocalAIGpuLayerCount As Integer = -1  ' -1 = all layers, 0 = CPU only, >0 = specific layer count
+    Public LocalAIIncludeTTS As Boolean = False  ' Whether to speak responses via Piper TTS
+    Public LocalAIUseSummarization As Boolean = False  ' Whether to use LocalAI for text summarization tasks
+
+    ' GPU Detection Cache
+    Public LocalAIGpuDetected As Boolean = False
+    Public LocalAICudaAvailable As Boolean = False
+    Public LocalAIGpuName As String = "Not detected"
+    Public LocalAIVramMB As Long = 0
+    Public LocalAILastGpuCheckTime As DateTime = DateTime.MinValue
+
+    Public Sub LoadLocalAISettings()
+        LocalAIModelPaths = StringCollectionToList(My.Settings.LocalAIModelPaths)
+        LocalAIVoices = StringCollectionToList(My.Settings.LocalAIVoices)
+        LocalAISelectedModel = My.Settings.LocalAISelectedModel
+        LocalAISelectedVoice = My.Settings.LocalAISelectedVoice
+        LocalAIUseGpu = My.Settings.LocalAIUseGpu
+        LocalAIGpuLayerCount = My.Settings.LocalAIGpuLayerCount
+        LocalAIIncludeTTS = My.Settings.LocalAIIncludeTTS
+        LocalAIUseSummarization = My.Settings.LocalAIUseSummarization
+        
+        ' GPU detection is now done ONCE and cached - don't refresh on every settings load
+        ' Only refresh if never done before
+        If LocalAILastGpuCheckTime = DateTime.MinValue Then
+            RefreshGpuDetection()
+        End If
+    End Sub
+
+    Public Sub SaveLocalAISettings()
+        My.Settings.LocalAIModelPaths = ListToStringCollection(LocalAIModelPaths)
+        My.Settings.LocalAIVoices = ListToStringCollection(LocalAIVoices)
+        My.Settings.LocalAISelectedModel = LocalAISelectedModel
+        My.Settings.LocalAISelectedVoice = LocalAISelectedVoice
+        My.Settings.LocalAIUseGpu = LocalAIUseGpu
+        My.Settings.LocalAIGpuLayerCount = LocalAIGpuLayerCount
+        My.Settings.LocalAIIncludeTTS = LocalAIIncludeTTS
+        My.Settings.LocalAIUseSummarization = LocalAIUseSummarization
+        My.Settings.Save()
+    End Sub
+
+    ''' <summary>
+    ''' Refreshes GPU detection cache from GpuDetection helper.
+    ''' </summary>
+    Public Sub RefreshGpuDetection()
+        Try
+            GpuDetection.EnsureDetectionPerformed()
+            LocalAIGpuDetected = GpuDetection.IsNvidiaGpuPresent
+            LocalAICudaAvailable = GpuDetection.IsCudaAvailable
+            LocalAIGpuName = GpuDetection.GpuName
+            LocalAIVramMB = GpuDetection.VramMB
+            LocalAILastGpuCheckTime = DateTime.Now
+            
+            Debug.WriteLine($"[Globals] GPU Detection refreshed: GPU={LocalAIGpuDetected}, CUDA={LocalAICudaAvailable}, Name={LocalAIGpuName}, VRAM={LocalAIVramMB}MB")
+        Catch ex As Exception
+            Debug.WriteLine($"[Globals] GPU Detection failed: {ex.Message}")
+            LocalAIGpuDetected = False
+            LocalAICudaAvailable = False
+        End Try
+    End Sub
+
+    Private Function StringCollectionToList(sc As StringCollection) As List(Of String)
+        If sc Is Nothing Then Return New List(Of String)
+        Return sc.Cast(Of String)().Where(Function(s) Not String.IsNullOrWhiteSpace(s)).Distinct().ToList()
+    End Function
+
+    Private Function ListToStringCollection(list As List(Of String)) As StringCollection
+        Dim sc As New StringCollection()
+        If list IsNot Nothing Then
+            For Each item In list
+                If Not String.IsNullOrWhiteSpace(item) Then sc.Add(item)
+            Next
+        End If
+        Return sc
+    End Function
 
     Public OriginalUserRequest As String = ""
 
@@ -25,6 +98,14 @@ Public Module Globals
     ''' Starts at 0 for each new request, increments with each planning cycle
     ''' </summary>
     Public CurrentIteration As Integer = 0
+
+    ' ========================== NATURAL RESPONSE SYSTEM ==============================
+    ''' <summary>
+    ''' Feature flag for natural AI assistant responses
+    ''' When True: Uses FinalResponseGenerator for conversational summaries
+    ''' When False: Falls back to legacy technical logs display
+    ''' </summary>
+    Public UseNaturalResponses As Boolean = False  ' DISABLED - causing duplicate responses
 
     ' ========================== Conversation & API Keys ==============================
     ' We keep the conversationHistory as before
@@ -260,5 +341,57 @@ Public Module Globals
         Public Property Duration As TimeSpan
         Public Property RemediationNote As String ' Added for remediation tracking
     End Class
+
+    ' ========================== LOCAL AI CONVENIENCE HELPERS ==============================
+    ''' <summary>
+    ''' Quick check if Local AI is configured (model path set and file exists).
+    ''' Does NOT load the model - just checks settings.
+    ''' </summary>
+    Public Function IsLocalAIConfigured() As Boolean
+        LoadLocalAISettings()
+        Return Not String.IsNullOrWhiteSpace(LocalAISelectedModel) AndAlso
+               System.IO.File.Exists(LocalAISelectedModel)
+    End Function
+
+    ''' <summary>
+    ''' Quick check if Piper TTS voice is configured.
+    ''' </summary>
+    Public Function IsPiperVoiceConfigured() As Boolean
+        LoadLocalAISettings()
+        Return Not String.IsNullOrWhiteSpace(LocalAISelectedVoice) AndAlso
+               System.IO.File.Exists(LocalAISelectedVoice)
+    End Function
+
+    ''' <summary>
+    ''' Checks if LocalAI summarization mode is enabled AND the engine is ready.
+    ''' Use this before routing summarization tasks to LocalAI.
+    ''' </summary>
+    Public Function IsLocalAISummarizationEnabled() As Boolean
+        LoadLocalAISettings()
+        If Not LocalAIUseSummarization Then Return False
+        Return IsSharedLocalAIReady()
+    End Function
+
+    ' ========================== SHARED LOCAL AI ENGINE ==============================
+    ''' <summary>
+    ''' Shared LocalAI engine instance - can be set by LocalAIForm when it loads the model.
+    ''' </summary>
+    Public SharedLocalAIEngine As LocalAIEngine = Nothing
+    Public SharedTTSEngine As PiperTTSEngine = Nothing
+
+    ''' <summary>
+    ''' Checks if the shared LocalAI engine is ready (model already loaded).
+    ''' Does NOT attempt to load - just checks if ready.
+    ''' </summary>
+    Public Function IsSharedLocalAIReady() As Boolean
+        Return SharedLocalAIEngine IsNot Nothing AndAlso SharedLocalAIEngine.IsModelLoaded
+    End Function
+
+    ''' <summary>
+    ''' Checks if the shared TTS engine is ready.
+    ''' </summary>
+    Public Function IsSharedTTSReady() As Boolean
+        Return SharedTTSEngine IsNot Nothing AndAlso SharedTTSEngine.IsReady
+    End Function
 
 End Module

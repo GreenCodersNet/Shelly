@@ -8,12 +8,42 @@
 ' ##########################################################
 
 Imports System.Linq
+Imports System.Text.RegularExpressions
 
 ''' <summary>
 ''' Module to determine if the user's goal has been achieved based on execution outcomes
 ''' ENHANCED: Generic action detection - no hardcoded patterns
 ''' </summary>
 Public Module GoalValidator
+
+    Private Function IsTimeOutcome(outcome As ExecutionOutcome) As Boolean
+        If outcome Is Nothing Then Return False
+
+        Dim script As String = ""
+        If outcome.Arguments IsNot Nothing AndAlso outcome.Arguments.ContainsKey("script") Then
+            script = If(outcome.Arguments("script"), String.Empty).ToString().ToLowerInvariant()
+        End If
+
+        Dim output = If(outcome.StandardOutput, String.Empty).ToLowerInvariant()
+
+        ' Detect explicit Get-Date usage or common time patterns
+        If Not String.IsNullOrWhiteSpace(script) AndAlso script.Contains("get-date") Then
+            Return True
+        End If
+
+        If Not String.IsNullOrWhiteSpace(output) Then
+            If output.Contains("get-date") Then Return True
+            If Regex.IsMatch(output, "\b\d{1,2}:\d{2}(:\d{2})?\s?(am|pm)?\b", RegexOptions.IgnoreCase) Then Return True
+            If output.Contains("am") OrElse output.Contains("pm") Then Return True
+        End If
+
+        ' Custom function path
+        If Not String.IsNullOrWhiteSpace(outcome.ToolName) AndAlso outcome.ToolName.Equals("GetCurrentDateTime", StringComparison.OrdinalIgnoreCase) Then
+            Return True
+        End If
+
+        Return False
+    End Function
 
     ''' <summary>
     ''' Detects all requested actions in the user's prompt
@@ -25,6 +55,11 @@ Public Module GoalValidator
         Dim actions As New List(Of String)()
         Dim lowerRequest = originalRequest.ToLowerInvariant()
         
+        ' Time / date requests
+        If lowerRequest.Contains(" time") OrElse lowerRequest.Contains("time ") OrElse lowerRequest.Contains("clock") OrElse lowerRequest.Contains("date") OrElse lowerRequest.Contains("today") Then
+            actions.Add("time")
+        End If
+         
         ' File operations
         If lowerRequest.Contains("search") OrElse lowerRequest.Contains("find") Then
             actions.Add("search")
@@ -169,6 +204,11 @@ Public Module GoalValidator
             completed.Add("screenshot")
         End If
 
+        ' Time completion
+        If outcomes.Any(Function(o) o.Status = OutcomeStatus.Success AndAlso IsTimeOutcome(o)) Then
+            completed.Add("time")
+        End If
+
         Debug.WriteLine($"[GoalValidator] Completed {completed.Count} actions: {String.Join(", ", completed)}")
 
         Return completed.Distinct().ToList()
@@ -235,6 +275,17 @@ Public Module GoalValidator
             .Where(Function(o) o.Status = OutcomeStatus.Success AndAlso o.ToolName <> "Skipped") _
             .GroupBy(Function(o) o.ToolName) _
             .Count()
+
+        ' If the original request clearly contains multiple actions (and/then), require at least 2 unique successes
+        Dim req = Globals.OriginalUserRequest
+        If Not String.IsNullOrWhiteSpace(req) Then
+            Dim lr = req.ToLowerInvariant()
+            Dim multi = lr.Contains(" and ") OrElse lr.Contains(" then ") OrElse lr.Contains(vbLf)
+            If multi AndAlso uniqueSuccesses < 2 Then
+                Debug.WriteLine("[GoalValidator] Multi-action prompt detected; waiting for additional successful steps")
+                Return False
+            End If
+        End If
 
         Debug.WriteLine($"[GoalValidator] Fallback: {uniqueSuccesses} unique successful tools")
 

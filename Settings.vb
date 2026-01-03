@@ -38,6 +38,15 @@ Public Class Settings
             aiSelection.SelectedIndex = 0
         End If
 
+        ' 4️⃣ Load LocalAI summarization setting
+        Globals.LoadLocalAISettings()
+        LocalAIcheckbox.Checked = Globals.LocalAIUseSummarization
+        If LocalAIcheckbox.Checked Then
+            LocalAIcheckbox.Text = "LocalAI Summarization ON "
+        Else
+            LocalAIcheckbox.Text = "LocalAI Summarization OFF"
+        End If
+
         ' … the rest of your Load (audio devices, checkboxes, etc.) …
     End Sub
 
@@ -68,14 +77,14 @@ Public Class Settings
 
     Public Sub PopulateAiModels()
         aiSelection.Items.Clear()
-        
+
         ' === GPT-5 Series (Frontier/Reasoning Models) ===
         aiSelection.Items.Add("gpt-5.2")        ' Best for coding and agentic tasks
         aiSelection.Items.Add("gpt-5.2-pro")    ' Smarter and more precise responses
         aiSelection.Items.Add("gpt-5")          ' Intelligent reasoning model
         aiSelection.Items.Add("gpt-5-mini")     ' Faster, cost-efficient GPT-5
         aiSelection.Items.Add("gpt-5-nano")     ' Fastest, most cost-efficient GPT-5
-        
+
         ' === GPT-4 Series (Non-Reasoning Models) ===
         aiSelection.Items.Add("gpt-4.1")        ' Smartest non-reasoning model
         aiSelection.Items.Add("gpt-4.1-mini")   ' Fast and cost-efficient
@@ -235,5 +244,39 @@ Public Class Settings
         Else
             AssitantID.PasswordChar = "●" ' Mask the input
         End If
+    End Sub
+
+    Private Sub localAI_Click(sender As Object, e As EventArgs) Handles localAI.Click
+        LocalAIForm.Show()
+    End Sub
+
+    Private Sub LocalAIcheckbox_CheckedChanged(sender As Object, e As EventArgs) Handles LocalAIcheckbox.CheckedChanged
+        ' Save the LocalAI summarization setting
+        Globals.LocalAIUseSummarization = LocalAIcheckbox.Checked
+        Globals.SaveLocalAISettings()
+
+        ' Update checkbox text to reflect state
+        If LocalAIcheckbox.Checked Then
+            LocalAIcheckbox.Text = "LocalAI Summarization ON "
+
+            ' Check if LocalAI is ready and show warning if not
+            If Not Globals.IsSharedLocalAIReady() Then
+                MessageBox.Show(
+                    "LocalAI summarization is enabled, but no model is loaded." & Environment.NewLine &
+                    "Please open LocalAI Form and load a model for this feature to work." & Environment.NewLine &
+                    "Until then, cloud AI will be used as fallback.",
+                    "LocalAI Not Ready",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                )
+            Else
+                Debug.WriteLine("[Settings] LocalAI summarization enabled - model is ready")
+            End If
+        Else
+            LocalAIcheckbox.Text = "LocalAI Summarization OFF"
+            Debug.WriteLine("[Settings] LocalAI summarization disabled")
+        End If
+
+        Me.ActiveControl = Nothing
     End Sub
 End Class

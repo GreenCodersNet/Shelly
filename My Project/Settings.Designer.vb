@@ -256,8 +256,8 @@ Namespace My
             End Set
         End Property
 
-        <Global.System.Configuration.UserScopedSettingAttribute(),
-         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),
+        <Global.System.Configuration.UserScopedSettingAttribute(), _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(), _
          Global.System.Configuration.DefaultSettingValueAttribute("True")>
         Public Property PowerShell_BlockSystemC() As Boolean
             Get
@@ -265,6 +265,100 @@ Namespace My
             End Get
             Set
                 Me("PowerShell_BlockSystemC") = Value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute()>  _
+        Public Property LocalAIModelPaths() As Global.System.Collections.Specialized.StringCollection
+            Get
+                Return CType(Me("LocalAIModelPaths"),Global.System.Collections.Specialized.StringCollection)
+            End Get
+            Set
+                Me("LocalAIModelPaths") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute()>  _
+        Public Property LocalAIVoices() As Global.System.Collections.Specialized.StringCollection
+            Get
+                Return CType(Me("LocalAIVoices"),Global.System.Collections.Specialized.StringCollection)
+            End Get
+            Set
+                Me("LocalAIVoices") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property LocalAISelectedModel() As String
+            Get
+                Return CType(Me("LocalAISelectedModel"),String)
+            End Get
+            Set
+                Me("LocalAISelectedModel") = value
+            End Set
+        End Property
+        
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("")>  _
+        Public Property LocalAISelectedVoice() As String
+            Get
+                Return CType(Me("LocalAISelectedVoice"),String)
+            End Get
+            Set
+                Me("LocalAISelectedVoice") = value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
+        Public Property LocalAIUseGpu() As Boolean
+            Get
+                Return CType(Me("LocalAIUseGpu"), Boolean)
+            End Get
+            Set
+                Me("LocalAIUseGpu") = value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("-1")>  _
+        Public Property LocalAIGpuLayerCount() As Integer
+            Get
+                Return CType(Me("LocalAIGpuLayerCount"), Integer)
+            End Get
+            Set
+                Me("LocalAIGpuLayerCount") = value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
+        Public Property LocalAIIncludeTTS() As Boolean
+            Get
+                Return CType(Me("LocalAIIncludeTTS"), Boolean)
+            End Get
+            Set
+                Me("LocalAIIncludeTTS") = value
+            End Set
+        End Property
+
+        <Global.System.Configuration.UserScopedSettingAttribute(),  _
+         Global.System.Diagnostics.DebuggerNonUserCodeAttribute(),  _
+         Global.System.Configuration.DefaultSettingValueAttribute("False")>  _
+        Public Property LocalAIUseSummarization() As Boolean
+            Get
+                Return CType(Me("LocalAIUseSummarization"), Boolean)
+            End Get
+            Set
+                Me("LocalAIUseSummarization") = value
             End Set
         End Property
     End Class

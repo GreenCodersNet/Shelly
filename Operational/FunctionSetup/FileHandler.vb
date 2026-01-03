@@ -297,49 +297,172 @@ Module FileHandler
     End Function
 
 
+    ''' <summary>
+    ''' Processes a text chunk by asking AI to produce an answer and a summary.
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS ON:
+    '''   - LocalAI extracts relevant information from the chunk
+    '''   - Returns extraction (not final answer) for later Cloud AI processing
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS OFF:
+    '''   - Cloud AI processes the chunk directly
+    ''' </summary>
     Public Async Function ProcessChunk(chunkText As String, userQuery As String) As Task(Of Tuple(Of String, String))
-        Dim prompt As String = "Based on the following text, answer the question and then provide a one-sentence summary of the text." & Environment.NewLine &
+        ' === CHECK FOR LOCALAI SUMMARIZATION MODE ===
+        If Globals.IsLocalAISummarizationEnabled() Then
+            Debug.WriteLine("[ProcessChunk] Using LocalAI for chunk EXTRACTION (not final answer)")
+            
+            ' Update status to show LocalAI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "LocalAI extracting from chunk..."
+            End If
+            
+            ' LocalAI extracts relevant information - does NOT generate final answer
+            Dim extractionPrompt As String = $"Extract information relevant to this question: {userQuery}{Environment.NewLine}" &
+                                             $"Text:{Environment.NewLine}{chunkText}{Environment.NewLine}{Environment.NewLine}" &
+                                             "OUTPUT FORMAT:{Environment.NewLine}" &
+                                             "Relevant_Info: <extracted facts relevant to the question>{Environment.NewLine}" &
+                                             "Summary: <one-sentence summary of this text section>"
+            
+            Dim localAIResult = Await LocalAITextService.GenerateWithModeAsync(
+                extractionPrompt,
+                LocalAIMode.Summarization,
+                CancellationToken.None,
+                384  ' Extraction can be shorter
+            )
+            
+            ' Check if LocalAI succeeded
+            If Not localAIResult.StartsWith("[ERROR]") AndAlso 
+               Not localAIResult.StartsWith("[Cancelled]") AndAlso 
+               Not localAIResult.StartsWith("[LocalAI") Then
+                Debug.WriteLine("[ProcessChunk] LocalAI extraction successful")
+                
+                ' Parse extraction and summary from response
+                Dim relevantInfo As String = ""
+                Dim summaryPart As String = ""
+                Dim lines() As String = localAIResult.Split({Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries)
+                For Each line In lines
+                    If line.Trim().StartsWith("Relevant_Info:", StringComparison.OrdinalIgnoreCase) Then
+                        relevantInfo = line.Substring(14).Trim()
+                    ElseIf line.Trim().StartsWith("Summary:", StringComparison.OrdinalIgnoreCase) Then
+                        summaryPart = line.Substring(8).Trim()
+                    End If
+                Next
+                
+                If String.IsNullOrWhiteSpace(relevantInfo) Then
+                    relevantInfo = localAIResult.Trim()
+                End If
+                
+                Return New Tuple(Of String, String)(relevantInfo, summaryPart)
+            Else
+                Debug.WriteLine($"[ProcessChunk] LocalAI failed: {localAIResult}, falling back to cloud AI")
+                ' Update status to show fallback
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI processing chunk (LocalAI fallback)..."
+                End If
+                ' Fall through to cloud AI
+            End If
+        Else
+            ' Update status to show Cloud AI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI processing chunk..."
+            End If
+        End If
+        
+        ' === FALLBACK TO CLOUD AI ===
+        Dim cloudPrompt As String = "Based on the following text, answer the question and then provide a one-sentence summary of the text." & Environment.NewLine &
                            "Question: " & userQuery & Environment.NewLine &
                            "Text:" & Environment.NewLine & chunkText & Environment.NewLine &
                            "Please format your response exactly as follows:" & Environment.NewLine &
                            "Answer: <your answer here>" & Environment.NewLine &
                            "Summary: <your summary here>"
         Dim messages As New List(Of Dictionary(Of String, String)) From {
-        New Dictionary(Of String, String) From {{"role", "system"}, {"content", "You are a helpful assistant."}},
-        New Dictionary(Of String, String) From {{"role", "user"}, {"content", prompt}}
-    }
+            New Dictionary(Of String, String) From {{"role", "system"}, {"content", "You are a helpful assistant."}},
+            New Dictionary(Of String, String) From {{"role", "user"}, {"content", cloudPrompt}}
+        }
         Dim response As String = Await AIcall.CallGPTCore(UserApiKey, AiModelSelection, messages, 0.5, CancellationToken.None)
         response = RemoveCustomFunctionCodeBlocks(response)
         If String.IsNullOrWhiteSpace(response) Then
             Debug.WriteLine("[ProcessChunk] Warning: Received an empty response from GPT.")
             Return New Tuple(Of String, String)("", "")
         End If
-        Dim answerPart As String = ""
-        Dim summaryPart As String = ""
-        Dim lines() As String = response.Split({Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries)
-        For Each line In lines
+        Dim answerResult As String = ""
+        Dim summaryResult As String = ""
+        Dim responseLines() As String = response.Split({Environment.NewLine}, StringSplitOptions.RemoveEmptyEntries)
+        For Each line In responseLines
             If line.Trim().StartsWith("Answer:", StringComparison.OrdinalIgnoreCase) Then
-                answerPart = line.Substring(7).Trim()
+                answerResult = line.Substring(7).Trim()
             ElseIf line.Trim().StartsWith("Summary:", StringComparison.OrdinalIgnoreCase) Then
-                summaryPart = line.Substring(8).Trim()
+                summaryResult = line.Substring(8).Trim()
             End If
         Next
-        Return New Tuple(Of String, String)(answerPart, summaryPart)
+        Return New Tuple(Of String, String)(answerResult, summaryResult)
     End Function
 
 
 
-    ' ProcessChunkUpdate: Processes a text chunk by asking GPT to update the text according to the user query.
-    ' The prompt instructs GPT to output only the updated text with no commentary.
+    ''' <summary>
+    ''' Processes a text chunk by asking AI to update the text according to the user query.
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS ON:
+    '''   - LocalAI processes the update instruction
+    '''   - For file updates, LocalAI handles the transformation
+    ''' 
+    ''' WHEN LocalAIUseSummarization IS OFF:
+    '''   - Cloud AI processes the update directly
+    ''' </summary>
     Public Async Function ProcessChunkUpdate(chunkText As String, userQuery As String) As Task(Of String)
-        Dim prompt As String = "Below is a portion of a file. Please update this text according to the following instruction:" & Environment.NewLine &
+        ' === CHECK FOR LOCALAI SUMMARIZATION MODE ===
+        If Globals.IsLocalAISummarizationEnabled() Then
+            Debug.WriteLine("[ProcessChunkUpdate] Using LocalAI for chunk update processing")
+            
+            ' Update status to show LocalAI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "LocalAI updating chunk..."
+            End If
+            
+            Dim prompt As String = $"Below is a portion of a file. Please update this text according to the following instruction:{Environment.NewLine}" &
+                                   $"Instruction: {userQuery} (If the chunk ends with an incomplete sentence, ignore that incomplete part.){Environment.NewLine}" &
+                                   $"Text:{Environment.NewLine}{chunkText}{Environment.NewLine}{Environment.NewLine}" &
+                                   "Output only the updated text exactly as it should appear, with no additional commentary."
+            
+            Dim localAIResult = Await LocalAITextService.GenerateWithModeAsync(
+                prompt,
+                LocalAIMode.Summarization,
+                CancellationToken.None,
+                1024  ' Updates may need more tokens
+            )
+            
+            ' Check if LocalAI succeeded
+            If Not localAIResult.StartsWith("[ERROR]") AndAlso 
+               Not localAIResult.StartsWith("[Cancelled]") AndAlso 
+               Not localAIResult.StartsWith("[LocalAI") Then
+                Debug.WriteLine("[ProcessChunkUpdate] LocalAI update successful")
+                Return localAIResult.Trim()
+            Else
+                Debug.WriteLine($"[ProcessChunkUpdate] LocalAI failed: {localAIResult}, falling back to cloud AI")
+                ' Update status to show fallback
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI updating chunk (LocalAI fallback)..."
+                End If
+                ' Fall through to cloud AI
+            End If
+        Else
+            ' Update status to show Cloud AI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI updating chunk..."
+            End If
+        End If
+        
+        ' === FALLBACK TO CLOUD AI ===
+        Dim cloudPrompt As String = "Below is a portion of a file. Please update this text according to the following instruction:" & Environment.NewLine &
                            "Instruction: " & userQuery & " (If the chunk ends with an incomplete sentence, ignore that incomplete part.)" & Environment.NewLine &
                            "Text:" & Environment.NewLine & chunkText & Environment.NewLine &
                            "Output only the updated text exactly as it should appear, with no additional commentary."
         Dim messages As New List(Of Dictionary(Of String, String)) From {
-        New Dictionary(Of String, String) From {{"role", "system"}, {"content", "You are a skilled editor and programmer."}},
-        New Dictionary(Of String, String) From {{"role", "user"}, {"content", prompt}}
-    }
+            New Dictionary(Of String, String) From {{"role", "system"}, {"content", "You are a skilled editor and programmer."}},
+            New Dictionary(Of String, String) From {{"role", "user"}, {"content", cloudPrompt}}
+        }
         Dim updatedChunk As String = Await AIcall.CallGPTCore(UserApiKey, AiModelSelection, messages, 0.7, CancellationToken.None)
         updatedChunk = RemoveCustomFunctionCodeBlocks(updatedChunk)
         Return updatedChunk.Trim()

@@ -38,6 +38,7 @@ Partial Class Settings
         Label6 = New Label()
         AssitantID = New TextBox()
         Panel4 = New Panel()
+        CheckBox2 = New CheckBox()
         Label7 = New Label()
         AboutButton = New Button()
         PowerShellButton = New Button()
@@ -50,7 +51,8 @@ Partial Class Settings
         Button1 = New Button()
         Label9 = New Label()
         Label8 = New Label()
-        CheckBox2 = New CheckBox()
+        localAI = New Button()
+        LocalAIcheckbox = New CheckBox()
         Panel3.SuspendLayout()
         Panel4.SuspendLayout()
         SuspendLayout()
@@ -246,6 +248,25 @@ Partial Class Settings
         Panel4.Size = New Size(415, 32)
         Panel4.TabIndex = 71
         ' 
+        ' CheckBox2
+        ' 
+        CheckBox2.Anchor = AnchorStyles.Top Or AnchorStyles.Right
+        CheckBox2.Appearance = Appearance.Button
+        CheckBox2.BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
+        CheckBox2.CheckAlign = ContentAlignment.MiddleCenter
+        CheckBox2.FlatAppearance.BorderColor = Color.Gray
+        CheckBox2.FlatStyle = FlatStyle.Flat
+        CheckBox2.Font = New Font("Arial Narrow", 15.75F, FontStyle.Regular, GraphicsUnit.Point, CByte(0))
+        CheckBox2.ForeColor = Color.White
+        CheckBox2.Location = New Point(380, -2)
+        CheckBox2.Margin = New Padding(0)
+        CheckBox2.Name = "CheckBox2"
+        CheckBox2.Size = New Size(38, 33)
+        CheckBox2.TabIndex = 84
+        CheckBox2.Text = "👁‍🗨"
+        CheckBox2.TextAlign = ContentAlignment.MiddleCenter
+        CheckBox2.UseVisualStyleBackColor = False
+        ' 
         ' Label7
         ' 
         Label7.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
@@ -261,7 +282,7 @@ Partial Class Settings
         ' 
         ' AboutButton
         ' 
-        AboutButton.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        AboutButton.Anchor = AnchorStyles.Bottom Or AnchorStyles.Right
         AboutButton.BackColor = Color.Transparent
         AboutButton.Cursor = Cursors.Hand
         AboutButton.FlatAppearance.MouseDownBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
@@ -269,9 +290,9 @@ Partial Class Settings
         AboutButton.FlatStyle = FlatStyle.Flat
         AboutButton.Font = New Font("Bahnschrift SemiLight", 10F)
         AboutButton.ForeColor = Color.MediumOrchid
-        AboutButton.Location = New Point(225, 386)
+        AboutButton.Location = New Point(659, 471)
         AboutButton.Name = "AboutButton"
-        AboutButton.Size = New Size(115, 64)
+        AboutButton.Size = New Size(115, 32)
         AboutButton.TabIndex = 73
         AboutButton.Text = "About"
         AboutButton.UseVisualStyleBackColor = False
@@ -367,7 +388,7 @@ Partial Class Settings
         DefaultFolderWindow.FlatStyle = FlatStyle.Flat
         DefaultFolderWindow.Font = New Font("Bahnschrift SemiLight", 10F)
         DefaultFolderWindow.ForeColor = Color.MediumOrchid
-        DefaultFolderWindow.Location = New Point(354, 386)
+        DefaultFolderWindow.Location = New Point(232, 386)
         DefaultFolderWindow.Name = "DefaultFolderWindow"
         DefaultFolderWindow.Size = New Size(115, 64)
         DefaultFolderWindow.TabIndex = 79
@@ -416,24 +437,43 @@ Partial Class Settings
         Label8.Size = New Size(1, 100)
         Label8.TabIndex = 83
         ' 
-        ' CheckBox2
+        ' localAI
         ' 
-        CheckBox2.Anchor = AnchorStyles.Top Or AnchorStyles.Right
-        CheckBox2.Appearance = Appearance.Button
-        CheckBox2.BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
-        CheckBox2.CheckAlign = ContentAlignment.MiddleCenter
-        CheckBox2.FlatAppearance.BorderColor = Color.Gray
-        CheckBox2.FlatStyle = FlatStyle.Flat
-        CheckBox2.Font = New Font("Arial Narrow", 15.75F, FontStyle.Regular, GraphicsUnit.Point, CByte(0))
-        CheckBox2.ForeColor = Color.White
-        CheckBox2.Location = New Point(380, -2)
-        CheckBox2.Margin = New Padding(0)
-        CheckBox2.Name = "CheckBox2"
-        CheckBox2.Size = New Size(38, 33)
-        CheckBox2.TabIndex = 84
-        CheckBox2.Text = "👁‍🗨"
-        CheckBox2.TextAlign = ContentAlignment.MiddleCenter
-        CheckBox2.UseVisualStyleBackColor = False
+        localAI.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        localAI.BackColor = Color.Transparent
+        localAI.Cursor = Cursors.Hand
+        localAI.FlatAppearance.MouseDownBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
+        localAI.FlatAppearance.MouseOverBackColor = Color.FromArgb(CByte(20), CByte(20), CByte(20))
+        localAI.FlatStyle = FlatStyle.Flat
+        localAI.Font = New Font("Bahnschrift SemiLight", 10F)
+        localAI.ForeColor = Color.DeepPink
+        localAI.Location = New Point(365, 386)
+        localAI.Name = "localAI"
+        localAI.Size = New Size(115, 64)
+        localAI.TabIndex = 84
+        localAI.Text = "Local AI"
+        localAI.UseVisualStyleBackColor = False
+        ' 
+        ' LocalAIcheckbox
+        ' 
+        LocalAIcheckbox.Anchor = AnchorStyles.Bottom Or AnchorStyles.Left
+        LocalAIcheckbox.Appearance = Appearance.Button
+        LocalAIcheckbox.AutoSize = True
+        LocalAIcheckbox.BackColor = Color.Transparent
+        LocalAIcheckbox.Cursor = Cursors.Hand
+        LocalAIcheckbox.FlatAppearance.BorderColor = Color.DeepPink
+        LocalAIcheckbox.FlatAppearance.CheckedBackColor = Color.Lime
+        LocalAIcheckbox.FlatAppearance.MouseDownBackColor = Color.Lime
+        LocalAIcheckbox.FlatAppearance.MouseOverBackColor = Color.Lime
+        LocalAIcheckbox.FlatStyle = FlatStyle.Flat
+        LocalAIcheckbox.Font = New Font("Bahnschrift SemiLight", 10F)
+        LocalAIcheckbox.ForeColor = Color.DimGray
+        LocalAIcheckbox.Location = New Point(422, 360)
+        LocalAIcheckbox.Name = "LocalAIcheckbox"
+        LocalAIcheckbox.Size = New Size(58, 27)
+        LocalAIcheckbox.TabIndex = 85
+        LocalAIcheckbox.Text = "AI ON "
+        LocalAIcheckbox.UseVisualStyleBackColor = False
         ' 
         ' Settings
         ' 
@@ -442,6 +482,8 @@ Partial Class Settings
         BackColor = Color.FromArgb(CByte(32), CByte(32), CByte(32))
         BackgroundImageLayout = ImageLayout.Stretch
         ClientSize = New Size(794, 526)
+        Controls.Add(LocalAIcheckbox)
+        Controls.Add(localAI)
         Controls.Add(Label8)
         Controls.Add(Label9)
         Controls.Add(Button1)
@@ -507,4 +549,6 @@ Partial Class Settings
     Friend WithEvents Label9 As Label
     Friend WithEvents Label8 As Label
     Friend WithEvents CheckBox2 As CheckBox
+    Friend WithEvents localAI As Button
+    Friend WithEvents LocalAIcheckbox As CheckBox
 End Class

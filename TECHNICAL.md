@@ -19,7 +19,7 @@ Shelly is a Windows assistant that plans, validates, executes, and adapts multi-
 8. **Summary:** For multi-step runs, a final `FreeResponse` summary is produced.
 
 ## Single-Step vs Multi-Step
-- **Single-step task:** Planner may emit one tool or a `FreeResponse`. After execution and goal check, Shelly stops. Example: “What’s 2+2?” ? `FreeResponse`.
+- **Single-step task:** Planner may emit one tool or a `FreeResponse`. After execution and goal check, Shelly stops. Example: "What's 2+2?" ? `FreeResponse`.
 - **Multi-step task:** Planner emits multiple steps or iterates: execute ? record outputs ? replan using outputs/errors ? continue until goal achieved or limits hit.
 
 ## Adaptation Mechanics
@@ -39,7 +39,61 @@ Shelly is a Windows assistant that plans, validates, executes, and adapts multi-
 - **Safety gates:** Destructive verb/path checks, optional blocks for network/env/jobs/C:\, optional Constrained Language Mode. Blocked scripts surface errors and do not run.
 - **Execution:** `ExecutePowerShellScriptAsync` with cancellation support. Remediation loop can apply heuristic fixes or GPT-suggested corrections (up to 5 attempts).
 
-## Example: "Find any file inside this folder [path] that talk about ‘ww2’"
+---
+
+## LocalAI Integration
+
+Shelly integrates a local LLM (via LLamaSharp) with **three distinct operational modes**:
+
+### Three-Role Architecture
+
+| Role | Purpose | Trigger | Cloud AI Involvement |
+|------|---------|---------|---------------------|
+| **Confirmation** | Voice TTS after tasks | `LocalAIIncludeTTS` checkbox | None (independent) |
+| **Summarization** | File/text analysis | `LocalAIUseSummarization` checkbox | Final response only |
+| **ConversationHistory** | Context compression | `LocalAIUseSummarization` checkbox | Fallback only |
+
+### LocalAI Usage Rules
+
+**? LocalAI IS used for (when enabled):**
+- Reading and analyzing large files (multi-batch extraction)
+- Compressing conversation history for token management
+- Rephrasing user prompts for clarity
+- Voice confirmations after task completion
+
+**? LocalAI is NEVER used for:**
+- PowerShell script generation or execution
+- AI reasoning or planning
+- Tool selection or orchestration
+- Final user-facing responses (Cloud AI always generates these)
+
+### Multi-Batch File Reading Flow
+
+When `LocalAIUseSummarization` is ON:
+```
+1. File ? Split into chunks (~500 words each)
+2. LocalAI ? Extract relevant facts from each chunk (NO final answer)
+3. All extractions ? Stored in memory
+4. Cloud AI ? Generate comprehensive final response (UNLIMITED length)
+```
+
+### Status Updates
+
+All LocalAI/Cloud AI switching functions display real-time status in `LabelStatusUpdate`:
+- "LocalAI processing chunk X/Y..."
+- "LocalAI compressing conversation history..."
+- "Cloud AI generating final response..."
+- "Cloud AI processing chunk (LocalAI fallback)..."
+
+### Key Files
+- `LocalAI/LocalAITextService.vb` - Three-mode service layer
+- `LocalAI/LocalAIEngine.vb` - LLamaSharp wrapper
+- `LocalAI/PiperTTSEngine.vb` - Piper TTS integration
+- `LocalAI/LOCALAI_ARCHITECTURE.md` - Detailed architecture documentation
+
+---
+
+## Example: "Find any file inside this folder [path] that talk about 'ww2'"
 1) **Plan:** AI proposes steps:
    - `ExecutePowerShellScript` to list files in the folder.
    - For each file returned, `ReadFileAndAnswer(filePaths=<file>, query="Does it mention ww2?")`.
@@ -52,17 +106,31 @@ Shelly is a Windows assistant that plans, validates, executes, and adapts multi-
 4) **Adaptation:**
    - If a file failed to read, next iteration can skip or adjust (e.g., different encoding or path fix) within retry limits.
 
+## Example: "Who are the main characters in story.docx?" (with LocalAI enabled)
+1) **Plan:** AI proposes `ReadFileAndAnswer(filePath="story.docx", query="main characters")`.
+2) **Execute with LocalAI Multi-Batch:**
+   - File split into 5 chunks
+   - LocalAI extracts from chunk 1/5... (status visible in UI)
+   - LocalAI extracts from chunk 2/5...
+   - ...continues for all chunks
+   - Cloud AI generates final comprehensive response (no token limits)
+3) **Result:** User sees detailed answer with all character information.
+
+---
+
 ## Logging & Telemetry
 - Outcomes: `GlobalOutcomeTracker` / `ExecutionOutcome` with statuses, outputs, errors.
 - Step outputs: `StepOutputManager` feeds planner context.
 - Debug logs: `Globals.AppendDebugLog`; clear via UI.
 - Interaction log: per-run JSONL at `Logs/interaction-log.jsonl` (adjacent to the executable). Cleared on startup; captures each user prompt and assistant reply.
+- LocalAI logs: `[LocalAI-TextService]` prefix shows mode, tokens, timing for each LocalAI call.
 
 ## Notes for Contributors
 - Add new functions in `CustomFunctions*.vb`, register schemas in `ToolSchema`, and ensure executor dispatch.
 - Prefer Custom Functions over PowerShell; only use PS when no function covers the need.
 - Keep safety flags and validation intact; never bypass schema checks.
 - Image gen uses `dall-e-3`; image/screen analysis uses vision models (e.g., `gpt-4.1-mini`) regardless of user selection.
+- **LocalAI:** Never use LocalAI for PowerShell, reasoning, or final responses. LocalAI = extraction workhorse, Cloud AI = final answers.
 
 ## Files to Review First
 - Orchestration: `Shelly.vb`, `HandleUserRequest.vb`
@@ -71,3 +139,4 @@ Shelly is a Windows assistant that plans, validates, executes, and adapts multi-
 - Functions: `CustomFunctions.vb`, `CustomFunctions_2.vb`, `CustomFunctionsEngine.vb`
 - PowerShell: `PowerShell.vb`, `PowerShellSafety.vb`
 - AI I/O: `AIcall.vb`, `AIBrainiac.vb`, `AIimage.vb`
+- LocalAI: `LocalAI/LocalAITextService.vb`, `LocalAI/LocalAIEngine.vb`, `LocalAI/LOCALAI_ARCHITECTURE.md`

@@ -40,6 +40,7 @@ Module ShellyOps
     End Function
 
     ' ### Revise the User prompt to best match ChatGPT
+    ' UPDATED: Now routes to LocalAI when LocalAIUseSummarization is enabled
     Public Async Function ReviseUserQuestionAsync(originalQuestion As String, ct As CancellationToken) As Task(Of String)
         Try
             ' If the original prompt contains code blocks (```), skip revision to preserve exact content.
@@ -47,6 +48,41 @@ Module ShellyOps
                 Return originalQuestion
             End If
 
+            ' === CHECK FOR LOCALAI SUMMARIZATION MODE ===
+            If Globals.IsLocalAISummarizationEnabled() Then
+                Debug.WriteLine("[ReviseUserQuestionAsync] Using LocalAI for prompt revision")
+                Debug.WriteLine($"[ReviseUserQuestionAsync] Original: {originalQuestion}")
+                
+                ' Update status to show LocalAI is processing
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.LabelStatusUpdate.Text = "LocalAI rephrasing prompt..."
+                End If
+                
+                Dim localAIResult = Await LocalAITextService.RephrasePromptAsync(originalQuestion, ct)
+                
+                ' Check if LocalAI succeeded (it returns original prompt on failure)
+                If Not localAIResult.StartsWith("[ERROR]") AndAlso 
+                   Not localAIResult.StartsWith("[Cancelled]") AndAlso 
+                   Not localAIResult.StartsWith("[LocalAI") Then
+                    Debug.WriteLine($"[ReviseUserQuestionAsync] LocalAI revision successful: {localAIResult}")
+                    Return localAIResult.Trim()
+                Else
+                    Debug.WriteLine($"[ReviseUserQuestionAsync] LocalAI failed, falling back to cloud AI")
+                    ' Update status to show fallback
+                    If Shelly.Instance IsNot Nothing Then
+                        Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI rephrasing (LocalAI fallback)..."
+                    End If
+                    ' Fall through to cloud AI
+                End If
+            Else
+                Debug.WriteLine("[ReviseUserQuestionAsync] Using cloud AI for prompt revision")
+                ' Update status to show Cloud AI is processing
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI rephrasing prompt..."
+                End If
+            End If
+
+            ' === FALLBACK TO CLOUD AI ===
             ' Revised system prompt for clarity:
             Dim revisionPrompt As String =
 "Please review the following user prompt. If it is already clear and well-structured, output it exactly as given, without any changes. 

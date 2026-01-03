@@ -81,6 +81,9 @@ Partial Public Class Shelly
         ' Reload persisted execution context for planner awareness
         GlobalOutcomeTracker.Instance.LoadFromDisk()
         StepOutputManager.Instance.LoadFromDisk()
+
+        ' Preload LocalAI model in background for instant voice summaries
+        LocalAIStartup.PreloadInBackground()
     End Sub
 
     ' Enhanced cleanup method with unique name
@@ -171,54 +174,20 @@ Partial Public Class Shelly
             ' DEBUG ADD: Log that RUN button was clicked
             Debug.WriteLine("[DEBUG] RUN button clicked.")
 
-
             ' -- START SESSION --
-
-
             cancellationTokenSource = New CancellationTokenSource
             CancelTaskButton.Enabled = True
-            Await HandleUserRequestAsync(cancellationTokenSource.Token) ' ==1==
 
-            ' =========================== CONFIRMATION ===========================
-            If lastRunMultiTask = True Then
-                Debug.WriteLine(" ------- multitask --------------")
+            ' HandleUserRequestAsync now handles natural response generation via FinalResponseGenerator
+            Await HandleUserRequestAsync(cancellationTokenSource.Token)
 
-                Dim userQuestion As String = "You just finished running a task or multiple tasks based on the User Prompt. 
-                Can you do a very short summary of all the tasks that were completed based on Conversation History?" & Environment.NewLine &
-                "*** Use the 'FreeResponse' tool for this step. ***" & Environment.NewLine &
-                "Do so in a friendly manner without repeating what the User asked, just ***a summary of what was done***." & Environment.NewLine &
-                "In case you found any errors or issues, please mention them in the summary." & Environment.NewLine &
-                "If there is no relevant data in the Conversation History, just respond that you are ready to help."
-
-                Dim reply As String = Await AIBrainiac.CallGPTBrain(
-                    Globals.UserApiKey,
-                    userQuestion,
-                    Globals.AssistantId,
-                    conversationHistory
-                )
-
-                ' Parse the JSON response to extract the "text" field
-                Try
-                    Dim parsedResponse As JArray = JArray.Parse(reply)
-                    Dim text As String = parsedResponse(0)("args")("text").ToString()
-
-                    ' Append the extracted text to the result box
-                    AppendResultToBox(text & Environment.NewLine & "-----------------------------" & Environment.NewLine)
-                Catch ex As Exception
-                    Debug.WriteLine($"[ERROR] Failed to parse JSON response: {ex.Message}")
-                    AppendResultToBox("Error: Unable to extract response text." & Environment.NewLine)
-                End Try
-                ' =========================== END CONFIRMATION ==========================
-
-                cancellationTokenSource = Nothing
-                CancelTaskButton.Enabled = False
-                lastRunMultiTask = False
-            Else
-                Debug.WriteLine(" ------- NOT multitask --------------")
-            End If
+            ' Clean up after completion
+            cancellationTokenSource = Nothing
+            CancelTaskButton.Enabled = False
+            lastRunMultiTask = False
         End If
-        Me.ActiveControl = Nothing
 
+        Me.ActiveControl = Nothing
         Debug.WriteLine($"[DEBUG] A total of {AICallCount} AI calls were made.")
     End Sub
 
@@ -338,6 +307,9 @@ Partial Public Class Shelly
 
             ' Reset execution ledger
             ExecutorAgent.ResetExecutionLedger()
+
+            ' Clear step output manager (including summaries for natural responses)
+            StepOutputManager.Instance.ClearAll()
 
             ' Clear original request
             Globals.OriginalUserRequest = ""
@@ -586,5 +558,6 @@ Partial Public Class Shelly
             AppendResultToBox($"[Resume Error] {ex.Message}" & Environment.NewLine)
         End Try
     End Function
+
 
 End Class

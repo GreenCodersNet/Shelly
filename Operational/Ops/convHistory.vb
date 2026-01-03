@@ -1,4 +1,4 @@
-﻿' ###  convHistory.vb - v1.0.1 ### 
+﻿' ###  convHistory.vb - v1.0.2 ### 
 
 ' ##########################################################
 '  Shelly - v1.0.1
@@ -43,12 +43,57 @@ Module convHistory
     End Function
 
     ' ===== Summarization Function =====
+    ' UPDATED v1.0.2: Uses specialized ConversationHistory mode for LocalAI
+    ' This is DIFFERENT from file summarization - it preserves conversation context
     Public Async Function SummarizeMessagesAsync(messagesToSummarize As List(Of ChatMessage)) As Task(Of String)
         Dim conversationText As New StringBuilder()
         For Each msg In messagesToSummarize
             conversationText.AppendLine(msg.Role.ToUpper() & ": " & msg.Content)
         Next
-        Dim summarizationPrompt As String = "Summarize the following conversation concisely, preserving key information and context. IMPORTANT: Do not alter or remove any content that appears within triple backticks (```), as these may contain code:" & vbCrLf & conversationText.ToString()
+        
+        Dim textToSummarize As String = conversationText.ToString()
+        
+        ' === CHECK FOR LOCALAI SUMMARIZATION MODE ===
+        ' Uses the specialized ConversationHistory mode (NOT generic Summarization)
+        If Globals.IsLocalAISummarizationEnabled() Then
+            Debug.WriteLine("[convHistory] Using LocalAI ConversationHistory mode for conversation summarization")
+            
+            ' Update status to show LocalAI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "LocalAI compressing conversation history..."
+            End If
+            
+            ' Use the specialized conversation summarization method
+            Dim localAIResult = Await LocalAITextService.SummarizeConversationAsync(
+                textToSummarize,
+                CancellationToken.None
+            )
+            
+            ' Check if LocalAI succeeded
+            If Not localAIResult.StartsWith("[ERROR]") AndAlso 
+               Not localAIResult.StartsWith("[Cancelled]") AndAlso 
+               Not localAIResult.StartsWith("[LocalAI") Then
+                Debug.WriteLine("[convHistory] LocalAI conversation summarization successful")
+                Return localAIResult.Trim()
+            Else
+                Debug.WriteLine($"[convHistory] LocalAI conversation summarization failed: {localAIResult}, falling back to cloud AI")
+                ' Update status to show fallback
+                If Shelly.Instance IsNot Nothing Then
+                    Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI compressing history (LocalAI fallback)..."
+                End If
+                ' Fall through to cloud AI
+            End If
+        Else
+            ' Update status to show Cloud AI is processing
+            If Shelly.Instance IsNot Nothing Then
+                Shelly.Instance.LabelStatusUpdate.Text = "Cloud AI compressing conversation history..."
+            End If
+        End If
+        
+        ' === FALLBACK TO CLOUD AI ===
+        Debug.WriteLine("[convHistory] Using cloud AI for conversation summarization")
+        
+        Dim summarizationPrompt As String = "Summarize the following conversation concisely, preserving key information and context. IMPORTANT: Do not alter or remove any content that appears within triple backticks (```), as these may contain code:" & vbCrLf & textToSummarize
 
         Dim messages As New List(Of Dictionary(Of String, String)) From {
             New Dictionary(Of String, String) From {{"role", "system"}, {"content", "You are an assistant that summarizes conversations."}},
